@@ -24,26 +24,22 @@ BASE_DIR = os.getcwd()
 KEYS_FILE = Path(BASE_DIR) / 'keys.txt'
 LOGS_DIR = Path(BASE_DIR) / 'logs'
 
-# Define o tamanho máximo do trecho do arquivo de log a ser lido
-MAX_BYTES = 50000000
+
+MAX_BYTES = 50000000  # Define o tamanho máximo do trecho do arquivo de log a ser lido
 
 
-def get_xml() -> requests.Response:
-    """Busca o XML no servidor remoto."""
+def get_xml() -> requests.Response:  # Busca o XML no servidor remoto
+    
     response = requests.get(URL_BASE)
     response.raise_for_status()
     return response
 
 
-def get_keys_from_response(response: requests.Response) -> set:
-    # Retorna um conjunto de chaves do XML.
+def get_keys_from_response(response: requests.Response) -> set:  # Retorna um conjunto de chaves do XML.
     return set(re.findall(r'<Key>(.*?)</Key>', response.content.decode()))
 
 
-def download_log_file(log_key: str, response: requests.Response, progress_bar: tqdm, bytes_total: int) -> None:
-    """
-    Downloads a log file from a given key and saves it to disk.
-    """
+def download_log_file(log_key: str, response: requests.Response, progress_bar: tqdm, bytes_total: int) -> None:  # Faz o download de um arquivo de registro de uma determinada chave e o salva no disco.
     url = URL_BASE + log_key
     log_file_path = LOGS_DIR / f'{log_key}.txt'
 
@@ -74,23 +70,18 @@ def fix_encoding(log_file_path: Path) -> None:
         file.write(log_bytes.decode(encoding))
 
 
-def detect_encoding(log_bytes: bytes) -> str:
-    """
-    Detecta a codificação de caracteres de um arquivo de log.
-    """
+def detect_encoding(log_bytes: bytes) -> str:  # Detecta a codificação de caracteres de um arquivo de log.   
     encoding = chardet.detect(log_bytes)['encoding']
     return encoding if encoding else 'utf-8'
 
 
-def is_log_file_complete(file_path: Path, response: requests.Response) -> bool:
-    """Verifica se um arquivo de log está completo."""
+def is_log_file_complete(file_path: Path, response: requests.Response) -> bool:  # Verifica se um arquivo de log está completo.    
     expected_size = int(response.headers.get('Content-Length', 0))
     return file_path.stat().st_size >= expected_size
 
 
 def check_logs_on_disk(response: requests.Response) -> None:
-    """Verifica se todos os arquivos de log correspondentes a cada chave 
-    listada no XML estão presentes no disco."""
+    # Verifica se todos os arquivos de log correspondentes a cada chave listada no XML estão presentes no disco.
     keys_xml = get_keys_from_response(response)
     missing_logs = keys_xml - set([f.stem for f in LOGS_DIR.glob('*.txt')])
 
@@ -100,13 +91,37 @@ def check_logs_on_disk(response: requests.Response) -> None:
         print('Todos os logs estão presentes no disco.')
 
 
-def update_keys_file(key: str) -> None:
-    """Atualiza o arquivo keys.txt com a nova chave, caso ela ainda não esteja presente no arquivo."""
+def update_keys_file(key: str) -> None:  # Atualiza o arquivo keys.txt com a nova chave, caso ela ainda não esteja presente no arquivo.
     with open(KEYS_FILE, 'r') as f:
         keys = set(f.read().splitlines())
     if key not in keys:
         with open(KEYS_FILE, 'a') as f:
             f.write(key + '\n')
+
+
+def download_new_logs() -> None:  # Baixa novos logs do servidor remoto.
+    new_keys = get_new_keys()
+    if new_keys:
+        print(f'Baixando {len(new_keys)} novos logs...')        
+        total_size = 0
+        for key in new_keys:
+            url = URL_BASE + key
+            response = requests.head(url)
+            total_size += int(response.headers.get('Content-Length', 0))
+        with tqdm(total=total_size, unit_scale=True, unit='B', bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as progress_bar:
+            for key in new_keys:
+                download_log_file(key, response, progress_bar,
+                                  bytes_total=total_size)                
+    else:
+        print('Todos os logs estão presentes no disco.')
+
+
+def get_new_keys() -> set:
+    """Retorna um conjunto de novas chaves."""
+    response = get_xml()
+    keys_xml = get_keys_from_response(response)
+    keys_downloaded = set([f.stem for f in LOGS_DIR.glob('*.txt')])
+    return keys_xml - keys_downloaded
 
 
 def main() -> None:
@@ -117,31 +132,7 @@ def main() -> None:
 
     print('Baixando o XML...')
 
-    response = get_xml()    
-    keys_xml = get_keys_from_response(response)    
-    keys_downloaded = set([f.stem for f in LOGS_DIR.glob('*.txt')])
-    new_keys = keys_xml - keys_downloaded
-
-    if new_keys:
-        print(f'Baixando {len(new_keys)} novos logs...')
-
-        total_size = 0
-        for key in new_keys:
-            print(f'Baixando {key}...')
-            url = URL_BASE + key
-            print(url)
-            response = requests.head(url)
-            print(response.headers)
-            total_size += int(response.headers.get('Content-Length', 0))
-            print(total_size)
-
-        with tqdm(total=total_size, unit_scale=True, unit='B', bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]') as progress_bar:
-            for key in new_keys:
-                download_log_file(key, response, progress_bar,
-                                  bytes_total=total_size)
-
-    else:
-        print('Todos os logs estão presentes no disco.')
+    download_new_logs()
 
 
 def run_job():
