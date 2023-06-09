@@ -102,7 +102,7 @@ def update_keys_file(key: str) -> None:  # Atualiza o arquivo keys.txt com a nov
 def download_new_logs() -> None:  # Baixa novos logs do servidor remoto.
     new_keys = get_new_keys()
     if new_keys:
-        print(f'Baixando {len(new_keys)} novos logs...')        
+        print(f'Baixando {len(new_keys)} novos logs...')
         total_size = 0
         for key in new_keys:
             url = URL_BASE + key
@@ -150,4 +150,4 @@ if __name__ == '__main__':
     main()
     while True:
         run_job()
-    # Se algun erro ocorrer, pare a execução
+        
