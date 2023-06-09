@@ -135,7 +135,7 @@ def main() -> None:
     download_new_logs()
 
 
-def run_job():
+def run_job():  # Executão do script no intervalo entre 8 a 10 horas
     random_seconds = random.uniform(8 * 3600, 10 * 3600)
     total_time = int(random_seconds)
     with tqdm(total=total_time, desc="Próxima execução...") as pbar:
