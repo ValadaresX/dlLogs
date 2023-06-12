@@ -1,0 +1,193 @@
+
+Processed event type ARENA_MATCH_START (2133/14189241)
+Processed event type COMBATANT_INFO (13928/14189241)
+Processed event type SPELL_AURA_APPLIED (1629918/14189241)
+Processed event type SPELL_CAST_SUCCESS (2614018/14189241)
+Processed event type SPELL_HEAL (3901270/14189241)
+Processed event type SPELL_PERIODIC_HEAL (4660723/14189241)
+Processed event type SPELL_AURA_REMOVED (6083892/14189241)
+Processed event type SPELL_AURA_REFRESH (7327226/14189241)
+Processed event type SPELL_ABSORBED (8303276/14189241)
+Processed event type SPELL_MISSED (8592773/14189241)
+Processed event type SPELL_DAMAGE (10062095/14189241)
+Processed event type SPELL_ENERGIZE (10533872/14189241)
+Processed event type SPELL_AURA_APPLIED_DOSE (11103313/14189241)
+Processed event type SPELL_CAST_START (11333019/14189241)
+Processed event type SPELL_AURA_BROKEN_SPELL (11348286/14189241)
+Processed event type SPELL_CAST_FAILED (11642587/14189241)
+Processed event type SPELL_PERIODIC_MISSED (11929938/14189241)
+Processed event type SWING_MISSED (12019181/14189241)
+Processed event type SWING_DAMAGE_LANDED (12305546/14189241)
+Processed event type SPELL_PERIODIC_DAMAGE (13366046/14189241)
+Processed event type SWING_DAMAGE (13671202/14189241)
+Processed event type SPELL_AURA_REMOVED_DOSE (13808675/14189241)
+Processed event type SPELL_SUMMON (13857275/14189241)
+Processed event type SPELL_DISPEL (13884054/14189241)
+Processed event type SPELL_INTERRUPT (13889862/14189241)
+Processed event type SPELL_STOLEN (13890564/14189241)
+Processed event type SPELL_PERIODIC_ENERGIZE (13927728/14189241)
+Processed event type DAMAGE_SPLIT (14078471/14189241)
+Processed event type PARTY_KILL (14081992/14189241)
+Processed event type UNIT_DIED (14098172/14189241)
+Processed event type ARENA_MATCH_END (14099299/14189241)
+Processed event type SPELL_EMPOWER_START (14101746/14189241)
+Processed event type SPELL_EMPOWER_END (14103814/14189241)
+Processed event type SPELL_CREATE (14104953/14189241)
+Processed event type RANGE_DAMAGE (14114756/14189241)
+Processed event type RANGE_MISSED (14116893/14189241)
+Processed event type UNIT_DESTROYED (14117037/14189241)
+Processed event type SPELL_EMPOWER_INTERRUPT (14117415/14189241)
+Processed event type SPELL_HEAL_ABSORBED (14187460/14189241)
+Processed event type SPELL_AURA_BROKEN (14187543/14189241)
+Processed event type SPELL_INSTAKILL (14187665/14189241)
+Processed event type SPELL_DRAIN (14188477/14189241)
+Processed event type SPELL_EXTRA_ATTACKS (14188967/14189241)
+Processed event type ENVIRONMENTAL_DAMAGE (14188985/14189241)
+Processed event type WORLD_MARKER_PLACED (14189113/14189241)
+Processed event type WORLD_MARKER_REMOVED (14189219/14189241)
+Processed event type ENCHANT_REMOVED (14189230/14189241)
+Processed event type ENCHANT_APPLIED (14189241/14189241)
+Tipo de evento: ARENA_MATCH_START
+  Número mínimo de elementos: 5
+  Número máximo de elementos: 5
+Tipo de evento: COMBATANT_INFO
+  Número mínimo de elementos: 217
+  Número máximo de elementos: 420
+Tipo de evento: SPELL_AURA_APPLIED
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 15
+Tipo de evento: SPELL_CAST_SUCCESS
+  Número mínimo de elementos: 29
+  Número máximo de elementos: 31
+Tipo de evento: SPELL_HEAL
+  Número mínimo de elementos: 34
+  Número máximo de elementos: 34
+Tipo de evento: SPELL_PERIODIC_HEAL
+  Número mínimo de elementos: 34
+  Número máximo de elementos: 34
+Tipo de evento: SPELL_AURA_REMOVED
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 15
+Tipo de evento: SPELL_AURA_REFRESH
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 14
+Tipo de evento: SPELL_ABSORBED
+  Número mínimo de elementos: 19
+  Número máximo de elementos: 22
+Tipo de evento: SPELL_MISSED
+  Número mínimo de elementos: 14
+  Número máximo de elementos: 17
+Tipo de evento: SPELL_DAMAGE
+  Número mínimo de elementos: 17
+  Número máximo de elementos: 39
+Tipo de evento: SPELL_ENERGIZE
+  Número mínimo de elementos: 33
+  Número máximo de elementos: 34
+Tipo de evento: SPELL_AURA_APPLIED_DOSE
+  Número mínimo de elementos: 14
+  Número máximo de elementos: 15
+Tipo de evento: SPELL_CAST_START
+  Número mínimo de elementos: 12
+  Número máximo de elementos: 12
+Tipo de evento: SPELL_AURA_BROKEN_SPELL
+  Número mínimo de elementos: 16
+  Número máximo de elementos: 16
+Tipo de evento: SPELL_CAST_FAILED
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 15
+Tipo de evento: SPELL_PERIODIC_MISSED
+  Número mínimo de elementos: 14
+  Número máximo de elementos: 17
+Tipo de evento: SWING_MISSED
+  Número mínimo de elementos: 11
+  Número máximo de elementos: 14
+Tipo de evento: SWING_DAMAGE_LANDED
+  Número mínimo de elementos: 36
+  Número máximo de elementos: 36
+Tipo de evento: SPELL_PERIODIC_DAMAGE
+  Número mínimo de elementos: 39
+  Número máximo de elementos: 39
+Tipo de evento: SWING_DAMAGE
+  Número mínimo de elementos: 36
+  Número máximo de elementos: 36
+Tipo de evento: SPELL_AURA_REMOVED_DOSE
+  Número mínimo de elementos: 14
+  Número máximo de elementos: 15
+Tipo de evento: SPELL_SUMMON
+  Número mínimo de elementos: 7
+  Número máximo de elementos: 14
+Tipo de evento: SPELL_DISPEL
+  Número mínimo de elementos: 16
+  Número máximo de elementos: 16
+Tipo de evento: SPELL_INTERRUPT
+  Número mínimo de elementos: 15
+  Número máximo de elementos: 15
+Tipo de evento: SPELL_STOLEN
+  Número mínimo de elementos: 16
+  Número máximo de elementos: 16
+Tipo de evento: SPELL_PERIODIC_ENERGIZE
+  Número mínimo de elementos: 33
+  Número máximo de elementos: 33
+Tipo de evento: DAMAGE_SPLIT
+  Número mínimo de elementos: 39
+  Número máximo de elementos: 39
+Tipo de evento: PARTY_KILL
+  Número mínimo de elementos: 10
+  Número máximo de elementos: 10
+Tipo de evento: UNIT_DIED
+  Número mínimo de elementos: 10
+  Número máximo de elementos: 10
+Tipo de evento: ARENA_MATCH_END
+  Número mínimo de elementos: 5
+  Número máximo de elementos: 5
+Tipo de evento: SPELL_EMPOWER_START
+  Número mínimo de elementos: 12
+  Número máximo de elementos: 12
+Tipo de evento: SPELL_EMPOWER_END
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 13
+Tipo de evento: SPELL_CREATE
+  Número mínimo de elementos: 12
+  Número máximo de elementos: 12
+Tipo de evento: RANGE_DAMAGE
+  Número mínimo de elementos: 39
+  Número máximo de elementos: 39
+Tipo de evento: RANGE_MISSED
+  Número mínimo de elementos: 14
+  Número máximo de elementos: 17
+Tipo de evento: UNIT_DESTROYED
+  Número mínimo de elementos: 10
+  Número máximo de elementos: 10
+Tipo de evento: SPELL_EMPOWER_INTERRUPT
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 13
+Tipo de evento: SPELL_HEAL_ABSORBED
+  Número mínimo de elementos: 21
+  Número máximo de elementos: 21
+Tipo de evento: SPELL_AURA_BROKEN
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 13
+Tipo de evento: SPELL_INSTAKILL
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 13
+Tipo de evento: SPELL_DRAIN
+  Número mínimo de elementos: 33
+  Número máximo de elementos: 33
+Tipo de evento: SPELL_EXTRA_ATTACKS
+  Número mínimo de elementos: 13
+  Número máximo de elementos: 13
+Tipo de evento: ENVIRONMENTAL_DAMAGE
+  Número mínimo de elementos: 37
+  Número máximo de elementos: 37
+Tipo de evento: WORLD_MARKER_PLACED
+  Número mínimo de elementos: 5
+  Número máximo de elementos: 5
+Tipo de evento: WORLD_MARKER_REMOVED
+  Número mínimo de elementos: 2
+  Número máximo de elementos: 2
+Tipo de evento: ENCHANT_REMOVED
+  Número mínimo de elementos: 12
+  Número máximo de elementos: 12
+Tipo de evento: ENCHANT_APPLIED
+  Número mínimo de elementos: 12
+  Número máximo de elementos: 12
