@@ -1,54 +1,69 @@
-import json
-import os
 import re
 from collections import defaultdict
 
 
-def parse_event_line(event_type, event_parts):
-    event_data = {}
-    event_data["type"] = event_type
-
-    # Adicione aqui a lógica de análise para cada tipo de evento
-    # Exemplo:
-    if event_type == "SPELL_AURA_APPLIED":
-        event_data["source"] = event_parts[1].strip()
-        event_data["target"] = event_parts[2].strip()
-        # Adicione mais campos conforme necessário
-
-    return event_data
+def getEventType(line) -> str:
+    """
+    Retorna o tipo de evento a partir da linha fornecida.
+    :param line: Uma string contendo o tipo de evento e outras informações.
+    :type line: str
+    :return: Uma string representando o tipo de evento.
+    :rtype: str
+    """
+    return line.split("  ")[1].split(",")[0]
 
 
-def process_events(folder_path):
-    events = []
-
-    for file_name in os.listdir(folder_path):
-        if file_name.endswith(".txt"):
-            file_path = os.path.join(folder_path, file_name)
-            with open(file_path, "r") as file:
-                for line in file:
-                    match = re.match(
-                        r"\d{1,2}\/\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}\.\d{1,}\s+(.+)", line
-                    )
-                    if match:
-                        event_data = match.group(1)
-                        event_parts = event_data.split(",")
-                        event_type = event_parts[0].strip()
-
-                        # Analisa a linha com base no tipo de evento e no número de elementos
-                        event = parse_event_line(event_type, event_parts)
-                        events.append(event)
-
+def getAllUniqueEventTypes(lines) -> set:
+    """
+    Retorna todos os tipos de eventos únicos a partir de uma lista de linhas de eventos.
+    :param lines: Uma lista de linhas de eventos.
+    :type lines: list
+    :return: Um conjunto contendo os tipos de eventos únicos.
+    :rtype: set
+    """
+    events = set(map(getEventType, lines))
     return events
 
 
-folder_path = "D:\\Projetos_Git\\dlLogs\\logs"
-events = process_events(folder_path)
+def getArgs(line) -> list:
+    return line.split("  ")[1].split(",")[1:]
 
-# Converter a lista de eventos em uma string JSON
-json_data = json.dumps(events, indent=2)
 
-# Salvar a string JSON em um arquivo
-with open("combat_log.json", "w") as json_file:
-    json_file.write(json_data)
+def splitEvent(line) -> re.Match:
+    pattern = re.compile(r"(\d\/\d+)\s(\d+\:\d+\:\d+\.\d+)\s\s(\w+),(.+)")
+    return pattern.match(line)
 
-print("Arquivo JSON gerado com sucesso.")
+
+def peakLines(lines, numLines=10) -> list:
+    return lines[:numLines]
+
+
+def argCount(line) -> int:
+    args = getArgs(line)
+    return len(args)
+
+
+def eventArgLengthDictionary(lines) -> dict:
+    eventTypes = defaultdict(set)
+    for line in lines:
+        match = splitEvent(line)
+        args = match.group(4).split(",")
+        eventTypes[match.group(3)].add(len(args))
+    return eventTypes
+
+
+with open(
+    "D:/Projetos_Git/dlLogs/scripts/logs/0050902dd75ac5836666d5cb41ff919e.txt"
+) as file:
+    combatLog = file.read()
+    lines = combatLog.splitlines()
+    eventArgsLengthDict = eventArgLengthDictionary(lines)
+    print(eventArgsLengthDict)
+    for event, lengths in eventArgsLengthDict.iteritems():
+        lengthString = ""
+        if len(lengths) > 1:
+            lengthString += str(min(lengths)) + "-" + str(max(lengths))
+        else:
+            lengthString += str(min(lengths))
+        print(event + ": " + lengthString)
+    # print((map(lambda x: splitEvent(x).groups()[1], peakLines(lines))))
