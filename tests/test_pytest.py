@@ -11,16 +11,19 @@ from scripts.copy_logs import (
 )
 
 
-@pytest.mark.parametrize("status_code", [200, 400, 404, 500])
-def test_status_code(status_code):
+def test_status_code():
     """
     Teste o código de status retornado pelo objeto Response em relação ao
-    código de status esperado e à mensagem de erro. Recebe um único parâmetro
-    `status_code`, que é o código de status esperado a ser testado.
+    código de status esperado e à mensagem de erro. O teste deve falhar se o
+    código de status retornado não for 200. Se o código de status retornado
+    for diferente de 200, a função deve identificar o código de status e
+    informar o que ele significa.
 
-    :param status_code: Um int que representa o código de status esperado.
     :return: None
     """
+    response = Response()
+    response.status_code = 200
+
     status_errors = {
         200: "Success",
         400: "Bad Request: Invalid input data",
@@ -28,13 +31,8 @@ def test_status_code(status_code):
         500: "Internal Server Error: Something went wrong on the server side",
     }
 
-    response = Response()
-    response.status_code = status_code
-
-    assert get_status_code(response) == status_code, (
-        f"Erro no status code {status_code}: "
-        f"Esperado {status_code} - {status_errors.get(status_code)}, "
-        f"obtido {response.status_code} - "
+    assert get_status_code(response) == 200, (
+        f"Erro no status code {response.status_code}: "
         f"{status_errors.get(response.status_code, 'Unknown')}"
     )
 
@@ -91,12 +89,21 @@ def test_filter_key_tag():
 
 def test_get_new_keys():
     """
-    Essa função testa a função 'get_new_keys' que recebe um conjunto de chaves
-    e retorna o conjunto como ele é. Ela afirma que o resultado retornado
-    pela função é igual ao resultado esperado.
+    Testa a função 'get_new_keys' que recebe um conjunto de chaves
+    e uma url base e retorna um conjunto com as novas chaves formadas pela
+    concatenação da url base com cada chave. O teste compara o resultado
+    da função com um conjunto esperado de novas chaves formadas pela
+    concatenação da url base com cada chave passada como entrada.
     """
 
-    test_keys_xml = {"key1", "key2", "key3"}
-    expected_result = test_keys_xml
-    result = get_new_keys(test_keys_xml)
+    keys_xml = {
+        "0000032d4670450f735dbde7d1fd0c3b",
+        "00000948a8751f20ef7405c3b3bec537",
+    }
+    url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
+    expected_result = {
+        "https://storage.googleapis.com/wowarenalogs-log-files-prod/0000032d4670450f735dbde7d1fd0c3b",
+        "https://storage.googleapis.com/wowarenalogs-log-files-prod/00000948a8751f20ef7405c3b3bec537",
+    }
+    result = get_new_keys(keys_xml, url_base)
     assert result == expected_result

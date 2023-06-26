@@ -50,91 +50,77 @@ def get_remote_xml_data() -> str:
 
 def filter_key_tag(data_xml: str) -> set:
     """
-    Filtra a string XML fornecida e retorna um conjunto com
-    as chaves correspondentes à tag "key".
-
-    :param data_xml: A string XML a ser filtrada.
-    :type data_xml: str
-    :return: Um conjunto com as chaves correspondentes à tag "key".
-    :rtype: set
+    Filtra os dados XML e extrai as chaves contidas nas tags <Key>
+    Args:
+        data_xml (str): Os dados XML a serem filtrados.
+    Returns:
+        set: Um conjunto de chaves extraídas dos dados XML.
+    Example:
+        >>> data = "<Contents><Key>00011f1647ad1b3ee67683f1b632da97</Key></Contents>"
+        >>> filter_key_tag(data)
+        {'key1', 'key2'}
     """
     pattern = r"<Key>(.*?)</Key>"
     found_keys = re.findall(pattern, data_xml)
     return set(found_keys)
 
 
-def get_new_keys(keys_xml: set) -> set:
-    """
-    A função get_new_keys recebe um conjunto de chaves no formato XML
-    e retorna um conjunto de novas chaves que não estão presentes no
-    diretório logs_dir. Se todas as chaves do conjunto keys_xml já tiverem
-    sido baixadas, será retornado um conjunto vazio.
-    Args:
-    keys_xml (set): um conjunto de chaves no formato XML.
-
-    Returns:
-    set: um conjunto de novas chaves que não estão presentes no diretório
-    logs_dir. Se todas as chaves do conjunto keys_xml já tiverem sido
-    baixadas, será retornado um conjunto vazio.
-    """
-    keys_downloaded = {f.stem for f in logs_dir.glob("*.txt")}
-    return keys_xml - keys_downloaded
+def get_new_keys(keys_xml: set, url_base: str) -> set:
+    new_keys = set()
+    for key in keys_xml:
+        new_keys.add(url_base + key)
+    return new_keys
 
 
 def download_logs(log_key: str, url_base: str, logs_dir: Path, pbar: tqdm) -> None:
     """
-    Baixa o arquivo de log com a chave especificada da URL base fornecida,
-    salva-o no diretório de logs especificado e corrige o formato do log.
+    Downloads the log file with the specified key from the provided base URL,
+    saves it in the specified logs directory, and fixes the log format.
 
-    :param log_key: A chave do arquivo de log a ser baixado.
+    :param log_key: The key of the log file to be downloaded.
     :type log_key: str
-    :param url_base: A URL base de onde o arquivo de log será baixado.
+    :param url_base: The base URL from where the log file will be downloaded.
     :type url_base: str
-    :param logs_dir: O diretório onde o arquivo de log será salvo.
+    :param logs_dir: The directory where the log file will be saved.
     :type logs_dir: Path
-    :param pbar: Uma barra de progresso a ser atualizada durante o download.
+    :param pbar: A progress bar to be updated during the download.
     :type pbar: tqdm
-    :return: Nenhum valor é retornado.
+    :return: None.
     :rtype: None
     """
     if not log_key:
-        print("Não há novos logs para baixar.")
+        print("No new logs to download.")
         return
 
     log_file_path = logs_dir / f"{log_key}.txt"
+    if log_file_path.exists():
+        print("Log already exists in logs folder.")
+        return
 
-    if not log_file_path.exists():
-        url = url_base + log_key
+    url = url_base + log_key  # nao é mais necessário
 
-        # Obter o tamanho do arquivo antes de baixá-lo
-        response = requests.head(url)
+    with requests.get(url, stream=True) as response:
+        response.raise_for_status()
+
         total_size = int(response.headers.get("content-length", 0))
-
-        # Atualizar a barra de progresso com o tamanho total do arquivo
         pbar.total = total_size
         pbar.refresh()
 
-        with requests.get(url, stream=True) as response:
-            response.raise_for_status()
+        log_bytes = b""
+        for fragment in response.iter_content(5000000):
+            log_bytes += fragment
+            if pbar is not None:
+                pbar.update(len(fragment))
 
-            log_bytes = b""  # Criar um buffer vazio de bytes.
-            for fragment in response.iter_content(5000000):
-                log_bytes += fragment
+        encoding = detect(log_bytes)["encoding"]
+        log_text = log_bytes.decode(encoding)
 
-                if pbar is not None:
-                    pbar.update(len(fragment))
-
-            encoding = detect(log_bytes)["encoding"]
-            log_text = log_bytes.decode(encoding)
-
-            with open(log_file_path, "w", encoding="utf-8") as file:
-                file.write(log_text)
-
-    else:
-        print("Log já existe na pasta logs.")
+    with open(log_file_path, "w", encoding="utf-8") as file:
+        file.write(log_text)
 
 
 """
+
 #  Fixa a codificação de caracteres de um arquivo de log.
 def fix_encoding(log_file_path: Path) -> None:
     with log_file_path.open("rb") as file:
