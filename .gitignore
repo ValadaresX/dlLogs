@@ -154,3 +154,4 @@ cython_debug/
 logs/
 scripts/logs
 .vscode/
+.vscode/settings.json
