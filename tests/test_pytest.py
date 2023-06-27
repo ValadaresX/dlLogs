@@ -1,6 +1,6 @@
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
-import pytest
 from requests import Response
 
 from scripts.copy_logs import (
@@ -105,8 +105,9 @@ def test_get_new_keys():
     Raises:
         AssertionError: se a validação falhar.
     """
+    logs_dir = Path.cwd() / "logs"
 
-    keys_xml = {
+    found_keys = {
         "0000032d4670450f735dbde7d1fd0c3b",
         "00000948a8751f20ef7405c3b3bec537",
     }
@@ -115,5 +116,76 @@ def test_get_new_keys():
         "https://storage.googleapis.com/wowarenalogs-log-files-prod/0000032d4670450f735dbde7d1fd0c3b",
         "https://storage.googleapis.com/wowarenalogs-log-files-prod/00000948a8751f20ef7405c3b3bec537",
     }
-    result = get_new_keys(keys_xml, url_base)
+    result = get_new_keys(found_keys, url_base, logs_dir)
     assert result == expected_result
+
+
+def test_download_logs_quando_esta_tudo_ok(mocker):
+    # Arrange
+    mock_pbar = MagicMock()
+    mock_response = MagicMock()
+    mock_response.headers = {"content-length": "10"}
+    mock_response.iter_content.return_value = [b"1234567890"]
+    new_keys = {"http://example.com"}
+    logs_dir = Path("logs")
+
+    # Act
+    mocker.patch("requests.get", return_value=mock_response)
+    mock_open = mocker.mock_open()
+    mocker.patch.object(__builtins__, "open", mock_open)
+    download_logs(new_keys, logs_dir, mock_pbar)
+
+    # Assert
+    mock_pbar.total.assert_called_with(10)
+    mock_pbar.update.assert_called_with(10)
+    mock_open.assert_called_with(logs_dir, "w", encoding="utf-8")
+    mock_open.return_value.write.assert_called_with(b"1234567890")
+
+
+"""
+def test_download_logs_quando_get_retorna_None(mocker):
+    # Arrange
+    mock_pbar = MagicMock()
+    new_keys = {"http://example.com"}
+    logs_dir = Path("logs")
+
+    # Act
+    mocker.patch("requests.get", return_value=None)
+    with pytest.raises(Exception) as e:
+        download_logs(new_keys, logs_dir, mock_pbar)
+
+    # Assert
+    assert str(e.value) == "Falha ao fazer download dos logs de http://example.com"
+
+def test_download_logs_quando_content_length_nao_esta_presente(mocker):
+    # Arrange
+    mock_pbar = MagicMock()
+    mock_response = MagicMock()
+    mock_response.headers = {}
+    new_keys = {"http://example.com"}
+    logs_dir = Path("logs")
+
+    # Act
+    mocker.patch("requests.get", return_value=mock_response)
+    with pytest.raises(Exception) as e:
+        download_logs(new_keys, logs_dir, mock_pbar)
+
+    # Assert
+    assert str(e.value) == "Falha ao obter o tamanho do conteúdo de http://example.com"
+
+def test_download_logs_quando_content_length_e_zero(mocker):
+    # Arrange
+    mock_pbar = MagicMock()
+    mock_response = MagicMock()
+    mock_response.headers = {"content-length": "0"}
+    new_keys = {"http://example.com"}
+    logs_dir = Path("logs")
+
+    # Act
+    mocker.patch("requests.get", return_value=mock_response)
+    with pytest.raises(Exception) as e:
+        download_logs(new_keys, logs_dir, mock_pbar)
+
+    # Assert
+    assert str(e.value) == "Falha ao fazer download dos logs de http://example.com"
+"""

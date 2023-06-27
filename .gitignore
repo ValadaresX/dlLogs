@@ -152,4 +152,5 @@ cython_debug/
 #.idea/
 
 logs/
-features/logs
+scripts/logs
+.vscode/

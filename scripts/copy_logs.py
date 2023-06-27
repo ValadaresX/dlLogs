@@ -11,12 +11,11 @@ from tqdm import tqdm
 #  Configuração do diretorios
 url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
 
-BASE_DIR = os.getcwd()
 
-KEYS_FILE = Path(BASE_DIR) / "keys.txt"
+KEYS_FILE = Path.cwd() / "keys.txt"
 
 
-logs_dir = Path(BASE_DIR) / "logs"
+logs_dir = Path.cwd() / "logs"
 
 
 def get_status_code(response: requests.Response) -> int:
@@ -63,60 +62,55 @@ def filter_key_tag(data_xml: str) -> set:
     pattern = r"<Key>(.*?)</Key>"
     found_keys = re.findall(pattern, data_xml)
     return set(found_keys)
+    # set = {"0000032d4670450f735dbde7d1fd0c3b", "00000948a8751f20ef7405c3b3bec537"}
 
 
-def get_new_keys(keys_xml: set, url_base: str) -> set:
+def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
+    """
+    Recebe um conjunto de chaves no formato XML e uma base de URL como
+    entrada e retorna um novo conjunto de chaves com a base de URL
+    anexado a cada chave. O conjunto de entrada não é modificado.
+    Verifica se todos os logs já existem no diretório de logs.
+
+    param existing_keys: Um conjunto de chaves no formato XML.
+    Tipo existing_keys: set
+    param url_base: Uma cadeia de caracteres que representa a URL
+                    base a ser anexada a cada chave.
+    Tipo url_base: str
+    param logs_dir: Um objeto Path que representa o
+                    diretório em que os registros são armazenados.
+    Tipo logs_dir: Path
+    :return: Um novo conjunto de chaves com a base de URL anexada a cada chave.
+    :rtype: set
+    """
     new_keys = set()
-    for key in keys_xml:
-        new_keys.add(url_base + key)
+    for key in found_keys:
+        log_file_path = logs_dir / f"{key}.txt"
+        if not log_file_path.exists():
+            new_keys.add(url_base + key)
     return new_keys
 
 
-def download_logs(log_key: str, url_base: str, logs_dir: Path, pbar: tqdm) -> None:
-    """
-    Downloads the log file with the specified key from the provided base URL,
-    saves it in the specified logs directory, and fixes the log format.
-
-    :param log_key: The key of the log file to be downloaded.
-    :type log_key: str
-    :param url_base: The base URL from where the log file will be downloaded.
-    :type url_base: str
-    :param logs_dir: The directory where the log file will be saved.
-    :type logs_dir: Path
-    :param pbar: A progress bar to be updated during the download.
-    :type pbar: tqdm
-    :return: None.
-    :rtype: None
-    """
-    if not log_key:
-        print("No new logs to download.")
+def download_logs(new_keys: set[str], logs_dir: Path, pbar: tqdm) -> None:
+    if not new_keys:
+        print("Não há novos registros para download.")
         return
 
-    log_file_path = logs_dir / f"{log_key}.txt"
-    if log_file_path.exists():
-        print("Log already exists in logs folder.")
-        return
-
-    url = url_base + log_key  # nao é mais necessário
-
-    with requests.get(url, stream=True) as response:
+    with requests.get(new_keys, stream=True) as response:
         response.raise_for_status()
 
         total_size = int(response.headers.get("content-length", 0))
         pbar.total = total_size
         pbar.refresh()
 
-        log_bytes = b""
-        for fragment in response.iter_content(5000000):
-            log_bytes += fragment
-            if pbar is not None:
-                pbar.update(len(fragment))
-
+        log_bytes = b"".join([fragment for fragment in response.iter_content(5000000)])
         encoding = detect(log_bytes)["encoding"]
         log_text = log_bytes.decode(encoding)
 
-    with open(log_file_path, "w", encoding="utf-8") as file:
+    with logs_dir.open("w", encoding="utf-8") as file:
         file.write(log_text)
+
+    print("Registros de log baixados com sucesso!")
 
 
 """
