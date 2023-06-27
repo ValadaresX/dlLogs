@@ -8,5 +8,8 @@
     "python.linting.mypyEnabled": false,
     "python.analysis.extraPaths": [
         "./scripts"
+    ],
+    "cSpell.words": [
+        "pbar"
     ]
 }
