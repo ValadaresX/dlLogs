@@ -13,14 +13,13 @@ from scripts.copy_logs import (
 
 def test_status_code():
     """
-    Teste o código de status retornado pelo objeto Response em relação ao
-    código de status esperado e à mensagem de erro. O teste deve falhar se o
-    código de status retornado não for 200. Se o código de status retornado
-    for diferente de 200, a função deve identificar o código de status e
-    informar o que ele significa.
+    Testa o código de status retornado pelo objeto Response em relação ao código
+    de status esperado e à mensagem de erro. O teste falhará se o código de
+    status retornado não for 200. Se o código de status retornado for diferente
+    de 200, a função identificará o código de status e fornecerá uma descrição
+    do que ele significa.
 
-    :return: None
-    """
+    Retorno: None"""
     response = Response()
     response.status_code = 200
 
@@ -39,9 +38,11 @@ def test_status_code():
 
 def test_get_remote_xml_data():
     """
-    Essa função é um teste de unidade que verifica a exatidão da função get_remote_xml_data.
-    Ela recupera uma cadeia de caracteres XML da função get_remote_xml_data e valida que a tag raiz é igual a
-    "{http://doc.s3.amazonaws.com/2006-03-01}ListBucketResult". Essa função não recebe nenhum parâmetro nem retorna
+    Essa função é um teste de unidade que verifica a exatidão da função
+    get_remote_xml_data. Ela recupera uma cadeia de caracteres XML da
+    função get_remote_xml_data e valida que a tag raiz é igual a
+    "{http://doc.s3.amazonaws.com/2006-03-01}ListBucketResult".
+    Essa função não recebe nenhum parâmetro nem retorna
     nada. Ela gera um AssertionError se a validação falhar.
     """
     xml_str = get_remote_xml_data()
@@ -51,8 +52,10 @@ def test_get_remote_xml_data():
 
 def test_filter_key_tag():
     """
-    Testa a função 'filter_key_tag' que extrai as chaves do XML de dados fornecido e as retorna como um conjunto.
-    O teste compara o resultado da função com um conjunto esperado de chaves extraídas do XML fornecido.
+    Testa a função filter_key_tag para verificar se retorna as chaves
+    esperadas do XML fornecido.
+
+    :return: None
     """
     xml_data = (
         "<?xml version='1.0' encoding='UTF-8'?>"
@@ -89,11 +92,18 @@ def test_filter_key_tag():
 
 def test_get_new_keys():
     """
-    Testa a função 'get_new_keys' que recebe um conjunto de chaves
-    e uma url base e retorna um conjunto com as novas chaves formadas pela
-    concatenação da url base com cada chave. O teste compara o resultado
-    da função com um conjunto esperado de novas chaves formadas pela
-    concatenação da url base com cada chave passada como entrada.
+    Testa a função 'filter_key_tag' que extrai as chaves do XML de dados
+    fornecido e as retorna como um conjunto.O teste compara o resultado
+    da função com um conjunto esperado de chaves extraídas do XML fornecido.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    Raises:
+        AssertionError: se a validação falhar.
     """
 
     keys_xml = {
