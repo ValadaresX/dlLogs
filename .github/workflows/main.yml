@@ -1,0 +1,19 @@
+# Controla quando a ação será executada. 
+on:
+# Aciona o workflow em eventos de push ou pull request, mas somente para o branch main
+  push:
+    branches:
+      - main
+
+# Um workflow pode ter vários jobs, executados em sequência ou paralelamente
+jobs:
+  # Este workflow contém um único job chamado "build"
+  build:
+    # O tipo de runner em que o job será executado
+    runs-on: ubuntu-latest
+
+    # As steps representam uma sequência de tarefas que serão executadas como parte do job
+    steps:
+      - name: Add mask
+        run: |
+          echo "::add-mask::${{ secrets.SECRET_URL }}" 
