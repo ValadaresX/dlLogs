@@ -12,7 +12,7 @@ jobs:
     # O tipo de runner em que o job será executado
     runs-on: ubuntu-latest
 
-    # As steps representam uma sequência de tarefas que serão executadas como parte do job
+    # As steps representam uma sequência de tarefas que serão executadas como parte do job.
     steps:
       - name: Add mask
         run: |
