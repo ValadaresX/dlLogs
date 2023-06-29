@@ -120,7 +120,7 @@ def download_text_files(new_keys: set[str], logs_dir: Path, pbar: tqdm) -> None:
     with logs_dir.open("w", encoding="utf-8") as file:
         file.write(log_text)
 
-    print("Registros de log baixados com sucesso!")
+    print("Registros de log baixados com sucesso!!")
 
 
 # Teste do script
