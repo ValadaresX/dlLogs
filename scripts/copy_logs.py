@@ -2,6 +2,7 @@ import os
 import random
 import re
 import time
+import urllib.parse
 from pathlib import Path
 
 import requests
@@ -91,10 +92,19 @@ def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
     return new_keys
 
 
-def download_logs(new_keys: set[str], logs_dir: Path, pbar: tqdm) -> None:
+def download_text_files(new_keys: set[str], logs_dir: Path, pbar: tqdm) -> None:
+    # Verificar se o parâmetro não é vazio
     if not new_keys:
-        print("Não há novos registros para download.")
-        return
+        raise ValueError("Não há novos registros para download.")
+    # Informa quantos registros serão baixados
+    print(f"Existem {len(new_keys)} registros para baixar.")
+    # Usa time para espera 3 segundos
+    time.sleep(50)
+
+    # Verificar se o parâmetro não uma URL válida
+    for url in new_keys:
+        if not urllib.parse.urlparse(url).scheme:
+            raise ValueError("O parâmetro 'new_keys' deve conter apenas URLs válidos.")
 
     with requests.get(new_keys, stream=True) as response:
         response.raise_for_status()
@@ -112,6 +122,18 @@ def download_logs(new_keys: set[str], logs_dir: Path, pbar: tqdm) -> None:
 
     print("Registros de log baixados com sucesso!")
 
+
+# Teste do script
+def main():
+    dados = get_remote_xml_data()
+    filtro = filter_key_tag(dados)
+    novas_chaves = get_new_keys(filtro, url_base, logs_dir)
+    pbar = tqdm(total=100)
+    download_text_files(novas_chaves, logs_dir, pbar)
+
+
+if __name__ == "__main__":
+    main()
 
 """
 

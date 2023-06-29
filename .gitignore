@@ -155,3 +155,4 @@ logs/
 scripts/logs
 .vscode/
 .vscode/settings.json
+tests/logs

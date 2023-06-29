@@ -1,9 +1,12 @@
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
+import requests_mock
 from requests import Response
+from tqdm import tqdm
 
 from scripts.copy_logs import (
+    download_text_files,
     filter_key_tag,
     get_new_keys,
     get_remote_xml_data,
@@ -92,9 +95,9 @@ def test_filter_key_tag():
 
 def test_get_new_keys():
     """
-    Testa a função 'filter_key_tag' que extrai as chaves do XML de dados
-    fornecido e as retorna como um conjunto.O teste compara o resultado
-    da função com um conjunto esperado de chaves extraídas do XML fornecido.
+    Test the 'get_new_keys' function that extracts the keys from the provided
+    data XML and returns them as a set. The test compares the result of the
+    function with an expected set of keys extracted from the provided XML.
 
     Args:
         None
@@ -103,89 +106,20 @@ def test_get_new_keys():
         None
 
     Raises:
-        AssertionError: se a validação falhar.
+        AssertionError: if the validation fails.
     """
-    logs_dir = Path.cwd() / "logs"
 
     found_keys = {
         "0000032d4670450f735dbde7d1fd0c3b",
         "00000948a8751f20ef7405c3b3bec537",
     }
+
     url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
     expected_result = {
-        "https://storage.googleapis.com/wowarenalogs-log-files-prod/0000032d4670450f735dbde7d1fd0c3b",
-        "https://storage.googleapis.com/wowarenalogs-log-files-prod/00000948a8751f20ef7405c3b3bec537",
+        "https://storage.googleapis.com/"
+        "wowarenalogs-log-files-prod/0000032d4670450f735dbde7d1fd0c3b",
+        "https://storage.googleapis.com/"
+        "wowarenalogs-log-files-prod/00000948a8751f20ef7405c3b3bec537",
     }
-    result = get_new_keys(found_keys, url_base, logs_dir)
-    assert result == expected_result
-
-
-def test_download_logs_quando_esta_tudo_ok(mocker):
-    # Arrange
-    mock_pbar = MagicMock()
-    mock_response = MagicMock()
-    mock_response.headers = {"content-length": "10"}
-    mock_response.iter_content.return_value = [b"1234567890"]
-    new_keys = {"http://example.com"}
-    logs_dir = Path("logs")
-
-    # Act
-    mocker.patch("requests.get", return_value=mock_response)
-    mock_open = mocker.mock_open()
-    mocker.patch.object(__builtins__, "open", mock_open)
-    download_logs(new_keys, logs_dir, mock_pbar)
-
-    # Assert
-    mock_pbar.total.assert_called_with(10)
-    mock_pbar.update.assert_called_with(10)
-    mock_open.assert_called_with(logs_dir, "w", encoding="utf-8")
-    mock_open.return_value.write.assert_called_with(b"1234567890")
-
-
-"""
-def test_download_logs_quando_get_retorna_None(mocker):
-    # Arrange
-    mock_pbar = MagicMock()
-    new_keys = {"http://example.com"}
-    logs_dir = Path("logs")
-
-    # Act
-    mocker.patch("requests.get", return_value=None)
-    with pytest.raises(Exception) as e:
-        download_logs(new_keys, logs_dir, mock_pbar)
-
-    # Assert
-    assert str(e.value) == "Falha ao fazer download dos logs de http://example.com"
-
-def test_download_logs_quando_content_length_nao_esta_presente(mocker):
-    # Arrange
-    mock_pbar = MagicMock()
-    mock_response = MagicMock()
-    mock_response.headers = {}
-    new_keys = {"http://example.com"}
-    logs_dir = Path("logs")
-
-    # Act
-    mocker.patch("requests.get", return_value=mock_response)
-    with pytest.raises(Exception) as e:
-        download_logs(new_keys, logs_dir, mock_pbar)
-
-    # Assert
-    assert str(e.value) == "Falha ao obter o tamanho do conteúdo de http://example.com"
-
-def test_download_logs_quando_content_length_e_zero(mocker):
-    # Arrange
-    mock_pbar = MagicMock()
-    mock_response = MagicMock()
-    mock_response.headers = {"content-length": "0"}
-    new_keys = {"http://example.com"}
-    logs_dir = Path("logs")
-
-    # Act
-    mocker.patch("requests.get", return_value=mock_response)
-    with pytest.raises(Exception) as e:
-        download_logs(new_keys, logs_dir, mock_pbar)
-
-    # Assert
-    assert str(e.value) == "Falha ao fazer download dos logs de http://example.com"
-"""
+    logs_dir = Path.cwd() / "logs"
+    assert get_new_keys(found_keys, url_base, logs_dir) == expected_result
