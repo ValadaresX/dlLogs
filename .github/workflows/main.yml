@@ -14,7 +14,3 @@ jobs:
 
       - name: Hide URL
         run: sed -i 's|url_base = ".*"|url_base = "******"|g' scripts/copy_logs.py
-
-    
-
-  
