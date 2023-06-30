@@ -14,7 +14,9 @@ jobs:
 
       - name: Find and Replace URL
         run: |
-         sed -i 's/http[s]\?:\/\/[^ ]*/\*\*\*\*\*/g' scripts/copy_logs.py   
-        
-                     
+          if grep -q -E 'http[s]?:\/\/[^ ]+' scripts/copy_logs.py; then
+            echo "URL encontrada no arquivo."
+          else
+            echo "Nenhuma URL encontrada no arquivo."
+          fi
       
