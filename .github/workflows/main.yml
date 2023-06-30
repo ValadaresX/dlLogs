@@ -19,6 +19,6 @@ jobs:
             sed -i 's|https://storage.googleapis.com/wowarenalogs-log-files-prod/|********|g' "$file"
             git add "$file"
           done
-          git config --global user.email "you@example.com"
-          git config --global user.name "Your Name"
+          git config --global user.email "brenovaladares27@gmail.com"
+          git config --global user.name "Breno"
           git commit -m "Replaced URLs in .py files"
