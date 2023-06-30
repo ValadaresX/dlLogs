@@ -14,6 +14,10 @@ jobs:
 
     # As steps representam uma sequência de tarefas que serão executadas como parte do job.
     steps:
+      - name: Print current working directory
+        run: pwd
+        shell: bash
+ 
       - name: Update URL base in main.yml
         run: |
           if [[ -f "main.yml" ]]; then
