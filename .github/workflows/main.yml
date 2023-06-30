@@ -1,16 +1,26 @@
-# Workflow para atualizar a URL base no arquivo main.yml
-name: Update URL base in main.yml
+name: Check and replace URL in .py files
 
-on:
+on: 
   push:
-    branches:
-      - main
+    paths:
+      - '**.py'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Add mask
+  replace-url:
+    runs-on: ubuntu-latest    
+    steps:      
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Replace URL
         run: |
-          echo "::add-mask::${{ secrets.url_base }}"
+          git diff --name-only HEAD^ | grep .py$ | while read -r file
+          do
+            sed -i 's|https://storage.googleapis.com/wowarenalogs-log-files-prod/|********|g' "$file"
+            git add "$file"
+          done
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          git commit -m "Replaced URLs in .py files"
+
 
