@@ -14,9 +14,8 @@ jobs:
 
     # As steps representam uma sequência de tarefas que serão executadas como parte do job.
     steps:
-      - name: Update URL base in script
-        run: find . -type f -name "*.py" -exec sed -i 's|^\(url_base = \).*|\1"******"|' {} +
-        shell: bash
+      - name: Update URL base in main.yml
+        run: sed -i 's|url_base = .*|url_base = "******"|' main.yml
 
     
 
