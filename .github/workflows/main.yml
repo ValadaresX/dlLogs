@@ -10,9 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Add Mask
-        run: echo "::add-mask::${{ secrets.SECRET_URL }}"
+      - name: Add mask
+        run: |
+          echo "::add-mask::${{ secrets.url_base }}"
 
-      - name: Echo a secret  
-        run: echo "your secret token is ${{ secrets.SECRET_URL }}"
-        shell: bash
