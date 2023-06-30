@@ -5,12 +5,16 @@ on:
       - main
 
 jobs:
-  replace-url:
-    runs-on: ubuntu-latest    
+  exemplo:
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout do código
         uses: actions/checkout@v2
 
-      - name: Replace URL in copy_logs.py
-        run: |
-          sed -i 's/url_base = ".*"/url_base = "**********"/' scripts/copy_logs.py
+      - name: Imprimir o segredo
+        env:
+          MY_SECRET: ${{ secrets.URL_MASK }}
+        run: echo $MY_SECRET
+
+  
