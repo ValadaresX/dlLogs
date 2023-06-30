@@ -1,40 +1,31 @@
-# Controla quando a ação será executada.
+# Workflow para atualizar a URL base no arquivo main.yml
+name: Update URL base in main.yml
+
 on:
-  # Aciona o workflow em eventos de push ou pull request, mas somente para o branch main.
   push:
     branches:
       - main
 
-# Um workflow pode ter vários jobs, executados em sequência ou paralelamente.
 jobs:
-  # Este workflow contém um único job chamado "build".
   build:
-    # O tipo de runner em que o job será executado.
     runs-on: ubuntu-latest
 
-    # As steps representam uma sequência de tarefas que serão executadas como parte do job.
     steps:
-      - name: Print current working directory
-        run: pwd
-        shell: bash
- 
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
       - name: Update URL base in main.yml
         run: |
-          if [[ -f "main.yml" ]]; then
-            sed -i 's|^\(url_base = \).*|\1"******"|' main.yml
-            count=$(grep -r 'url_base = "******"' . --include=*.py | wc -l)
-            if [[ $count -gt 0 ]]; then
-              echo "Number of variables changed: $count"
-            else
-              echo "No variables changed."
-            fi
+          # Substitui a URL base existente por "******"
+          sed -i 's|^\(url_base = \).*|\1"******"|' dlLogs/.github/workflows/main.yml
+          
+          # Conta o número de variáveis alteradas
+          count=$(grep -r 'url_base = "******"' dlLogs/.github/workflows --include=*.py | wc -l)
+          
+          # Exibe o número de variáveis alteradas ou uma mensagem se nenhumas foram alteradas
+          if [[ $count -gt 0 ]]; then
+            echo "Number of variables changed: $count"
           else
-            echo "main.yml file not found."
+            echo "No variables changed."
           fi
         shell: bash
-
-    
-
-          
-
-     
