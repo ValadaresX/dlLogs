@@ -15,6 +15,6 @@ jobs:
       - name: Imprimir o segredo
         env:
           MY_SECRET: ${{ secrets.URL_MASK }}
-        run: echo $MY_SECRET
+        run: echo $URL_MASK
 
   
