@@ -17,8 +17,9 @@ jobs:
           find . -type f -name "*.py" -exec sed -i 's/http[s]\?:\/\/[^ ]*/******/g' {} +
           git config --global user.email "brenovaladares27@gmail.com"
           git config --global user.name "ValadaresX"
-          git add *.py
-          git commit -am "Replaced URLs in .py files" && git push
+          git add .
+          git commit -am "Replaced URLs in .py files"
+          git push
 
 
 
