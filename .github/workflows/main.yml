@@ -16,7 +16,8 @@ jobs:
         run: |
           URL=$(grep -E -o 'http[s]?:\/\/[^ ]+' scripts/copy_logs.py)
           if [[ -n $URL ]]; then
-            echo "URL encontrada no arquivo: $URL"
+            sed -i "s|$URL|******|g" scripts/copy_logs.py
+            echo "URL substituída com sucesso."
           else
             echo "Nenhuma URL encontrada no arquivo."
           fi
