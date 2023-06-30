@@ -11,8 +11,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+
+      - name: Find and Replace URL
+        run: |
+         sed -i 's/http[s]\?:\/\/[^ ]*/\*\*\*\*\*/g' scripts/copy_logs.py   
         
-        env:
-          URL_BASE: ${{ secrets.URL_MASK }}
                      
       
