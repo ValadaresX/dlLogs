@@ -14,11 +14,15 @@ jobs:
 
     # As steps representam uma sequência de tarefas que serão executadas como parte do job.
     steps:
-      - name: Update URL base in script
+      - name: Update URL base in main.yml
         run: |
-          find . -type f -name "*.py" -exec sed -i 's|^\(url_base = \).*|\1"******"|' {} +
+          sed -i 's|^\(url_base = \).*|\1"******"|' main.yml
           count=$(grep -r 'url_base = "******"' . --include=*.py | wc -l)
-          echo "Número de variáveis alteradas: $count"
+          if [[ $count -gt 0 ]]; then
+            echo "Number of variables changed: $count"
+          else
+            echo "No variables changed."
+          fi
         shell: bash
 
     
