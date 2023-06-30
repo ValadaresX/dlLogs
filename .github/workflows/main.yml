@@ -9,12 +9,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do código
+      - name: Checkout code
         uses: actions/checkout@v2
+    
+      - name: Hide URL
+        run: sed -i "s|${{ secrets.URL_MASK }}|******|g" scripts/copy_logs.py
 
-      - name: Imprimir o segredo
-        env:
-          MY_SECRET: ${{ secrets.URL_MASK }}
-        run: echo $URL_MASK
+    
 
   
