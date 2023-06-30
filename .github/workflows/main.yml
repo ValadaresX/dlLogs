@@ -14,8 +14,9 @@ jobs:
 
       - name: Find and Replace URL
         run: |
-          if grep -q -E 'http[s]?:\/\/[^ ]+' scripts/copy_logs.py; then
-            echo "URL encontrada no arquivo."
+          URL=$(grep -E -o 'http[s]?:\/\/[^ ]+' scripts/copy_logs.py)
+          if [[ -n $URL ]]; then
+            echo "URL encontrada no arquivo: $URL"
           else
             echo "Nenhuma URL encontrada no arquivo."
           fi
