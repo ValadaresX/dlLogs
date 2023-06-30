@@ -14,7 +14,6 @@ url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
 
 KEYS_FILE = Path.cwd() / "keys.txt"
 
-
 logs_dir = Path.cwd() / "logs"
 
 
