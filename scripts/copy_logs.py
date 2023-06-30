@@ -148,7 +148,7 @@ def download_text_files(new_keys, logs_dir):
 
 
 def main():
-    # Executar o script
+    # Executar o script teste
     data = get_remote_xml_data()
     found_keys = filter_key_tag(data)
     new_keys = get_new_keys(found_keys, url_base, logs_dir)
