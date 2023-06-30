@@ -9,6 +9,9 @@ jobs:
   replace-url:
     runs-on: ubuntu-latest    
     steps:
-      - name: Replace URL in copy_logs.py
-        run: sed -i 's/url_base = ".*"/url_base = "**********"/' scripts/copy_logs.py
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
+      - name: Replace URL in copy_logs.py
+        run: |
+          sed -i 's/url_base = ".*"/url_base = "**********"/' scripts/copy_logs.py
