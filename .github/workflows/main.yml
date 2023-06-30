@@ -14,10 +14,12 @@ jobs:
 
       - name: Find and Replace URL
         run: |
-          URL=$(grep -E -o 'http[s]?:\/\/[^ ]+' scripts/copy_logs.py)
-          if [[ -n $URL ]]; then
-            echo "URL encontrada no arquivo: $URL"
+          sed -i 's/http[s]\?:\/\/[^ ]*/\*\*\*\*\*/g' scripts/copy_logs.py
+          if diff --brief scripts/copy_logs.py ${{ github.workspace }}/scripts/copy_logs.py >/dev/null; then
+            echo "URL não encontrada no arquivo ou já foi substituída."
           else
-            echo "Nenhuma URL encontrada no arquivo."
+            echo "URL foi substituída com sucesso."
           fi
+        
+                     
       
