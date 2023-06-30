@@ -14,11 +14,9 @@ jobs:
 
     # As steps representam uma sequência de tarefas que serão executadas como parte do job.
     steps:
-      - name: Secrets        
-        run: 
-          echo "$DEVOPS"         
-        env:
-          DEVOPS: ${{ secrets.SECRET_URL }}
+      - name: Update URL base in script
+        run: sed -i 's|url_base = .*|url_base = "******"|g' $(find . -name "copy_logs.py")
+        shell: bash
           
 
      
