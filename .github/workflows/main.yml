@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest    
     steps:      
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v1
 
       - name: Replace URL
         run: |
@@ -22,5 +22,3 @@ jobs:
           git config --global user.email "you@example.com"
           git config --global user.name "Your Name"
           git commit -m "Replaced URLs in .py files"
-
-
