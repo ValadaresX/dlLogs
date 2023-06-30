@@ -10,7 +10,7 @@ from chardet import detect
 from tqdm import tqdm
 
 #  Configuração do diretorios
-url_base = "ssh://https://storage.googleapis.com/wowarenalogs-log-files-prod/"
+url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
 
 KEYS_FILE = Path.cwd() / "keys.txt"
 
