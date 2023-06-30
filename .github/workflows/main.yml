@@ -18,6 +18,10 @@ jobs:
           do
             sed -i 's|https://storage.googleapis.com/wowarenalogs-log-files-prod/|********|g' "$file"
             git add "$file"
+      - name: Add Mask
+        run: echo "::add-mask::${{ secrets.URL_MASK }}"
+      - name: Echo a secret  
+        run: echo "your secret token is ${{ secrets.URL_MASK }}"
           done
           git config --global user.email "brenovaladares27@gmail.com"
           git config --global user.name "Breno"
