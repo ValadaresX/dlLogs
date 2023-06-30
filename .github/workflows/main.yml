@@ -4,16 +4,12 @@ on:
     branches:
       - main
 
+env:
+  URL_MASK: ${{ secrets.URL_MASK }}
 jobs:
   exemplo:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v1
-
-      - name: Hide URL
-        run: sed -i 's|url_base = ".*"|url_base = "******"|g' scripts/copy_logs.py
-
-      - name: Usando segredo
-        run: sed -i "s|${{ secrets.URL_MASK }}|******|g" scripts/copy_logs.py
+        uses: actions/checkout@v2
