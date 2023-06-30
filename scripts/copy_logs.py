@@ -1,18 +1,18 @@
 import os
-import random
 import re
 import time
-import urllib.parse
 from pathlib import Path
+from urllib.parse import urlparse
 
+import chardet
 import requests
-from chardet import detect
 from tqdm import tqdm
 
 #  Configuração do diretorios
 url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
 
 KEYS_FILE = Path.cwd() / "keys.txt"
+
 logs_dir = Path.cwd() / "logs"
 
 
@@ -41,7 +41,7 @@ def get_remote_xml_data() -> str:
     :rtype: str
     """
     response = requests.get(url_base)
-    encoding = detect(response.content)["encoding"]
+    encoding = chardet.detect(response.content)["encoding"]
     return response.content.decode(encoding)
 
 
@@ -89,44 +89,70 @@ def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
     return new_keys
 
 
-def download_text_files(new_keys: set[str], logs_dir: Path, pbar: tqdm) -> None:
-    # Verificar se o parâmetro não é vazio
+def download_text_files(new_keys, logs_dir):
+    # 1 - Verificar se o parâmetro new_keys não está vazio.
     if not new_keys:
         raise ValueError("Não há novos registros para download.")
-    # Informa quantos registros serão baixados
+
+    # 2 - Imprimir a quantidade de registros a serem baixados
     print(f"Existem {len(new_keys)} registros para baixar.")
-    # Usa time para espera 3 segundos
-    time.sleep(50)
 
-    # Verificar se o parâmetro não uma URL válida
+    # 3 - Aguardar 2 segundos
+    time.sleep(2)
+
     for url in new_keys:
-        if not urllib.parse.urlparse(url).scheme:
-            raise ValueError("O parâmetro 'new_keys' deve conter apenas URLs válidos.")
+        # 4 - Verificar se cada URL em new_keys é uma URL válida.
+        parsed_url = urlparse(url)
+        if not all([parsed_url.scheme, parsed_url.netloc]):
+            raise ValueError("O parâmetro 'new_keys' deve conter apenas URLs válidas.")
 
-    with requests.get(new_keys, stream=True) as response:
+        # 5 - Fazer uma requisição HTTP GET para cada URL em new_keys
+        response = requests.get(url, stream=True)
+
+        # 6 - Verificar se a resposta da requisição possui um código de status de sucesso
         response.raise_for_status()
 
+        # 7 - Obter o tamanho total do conteúdo da resposta
         total_size = int(response.headers.get("content-length", 0))
-        pbar.total = total_size
-        pbar.refresh()
 
-        log_bytes = b"".join([fragment for fragment in response.iter_content(5000000)])
-        encoding = detect(log_bytes)["encoding"]
+        # 8 - Atualizar o valor total do progress bar
+        pbar = tqdm(total=total_size, unit="iB", unit_scale=True)
+
+        log_bytes = b""
+        for data in response.iter_content(chunk_size=1024):
+            # 9 - Iterar sobre os fragmentos de conteúdo da resposta
+            log_bytes += data
+            pbar.update(len(data))
+
+        pbar.close()
+
+        # 10 - Concatenar os fragmentos de conteúdo em uma variável log_bytes do tipo bytes.
+        # Já feito no loop acima
+
+        # 11 - Detectar a codificação do conteúdo
+        encoding = chardet.detect(log_bytes)["encoding"]
+
+        # 12 - Decodificar log_bytes para uma string
         log_text = log_bytes.decode(encoding)
 
-    with logs_dir.open("w", encoding="utf-8") as file:
-        file.write(log_text)
+        # 13 - Abrir o arquivo em logs_dir em modo de escrita ("w")
+        filename = os.path.join(logs_dir, os.path.basename(url))
+        with open(filename, "w", encoding="utf-8") as f:
+            # 14 - Escrever o conteúdo de log_text no arquivo.
+            f.write(log_text)
 
+        # 15 - Fechar o arquivo.
+        # O arquivo é automaticamente fechado ao sair do bloco with
+
+    # 16 - Imprimir a mensagem "Registros de log baixados com sucesso!!"
     print("Registros de log baixados com sucesso!!")
 
 
-# Teste do script
 def main():
-    dados = get_remote_xml_data()
-    filtro = filter_key_tag(dados)
-    novas_chaves = get_new_keys(filtro, url_base, logs_dir)
-    pbar = tqdm(total=100)
-    download_text_files(novas_chaves, logs_dir, pbar)
+    data = get_remote_xml_data()
+    found_keys = filter_key_tag(data)
+    new_keys = get_new_keys(found_keys, url_base, logs_dir)
+    download_text_files(new_keys, logs_dir)
 
 
 if __name__ == "__main__":
