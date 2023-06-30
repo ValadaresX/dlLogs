@@ -145,7 +145,7 @@ def download_text_files(new_keys, logs_dir):
         # O arquivo é automaticamente fechado ao sair do bloco with
 
     # 16 - Imprimir a mensagem "Registros de log baixados com sucesso!!"
-    print("Registros de log baixados com sucesso!!")
+    print("Registros de log baixados com sucesso!!!")
 
 
 def main():
