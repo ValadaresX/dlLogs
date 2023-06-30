@@ -1,9 +1,8 @@
-name: Check and replace URL in .py files
-
-on: 
+name: Find and Replace Example
+on:
   push:
-    paths:
-      - '**.py'
+    branches:
+      - main
 
 jobs:
   replace-url:
