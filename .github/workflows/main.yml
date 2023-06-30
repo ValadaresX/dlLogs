@@ -11,7 +11,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        
         env:
-          URL_MASK: ${{ secrets.URL_MASK }}
-          run: echo $URL_MASK            
+          URL_MASK: ${{ secrets.URL_MASK }}scripts/copy_logs.py
+                     
       
