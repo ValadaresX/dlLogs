@@ -8,21 +8,10 @@ on:
 jobs:
   replace-url:
     runs-on: ubuntu-latest    
-    steps:      
-      - name: Checkout code
-        uses: actions/checkout@v1
-
-      - name: Replace URL
+    steps:
+      - name: Run Commands with a Secret
+      env:
+        SECRET_VALUE: ${{ secrets.URL_MASK }
         run: |
-          git diff --name-only HEAD^ | grep .py$ | while read -r file
-          do
-            sed -i 's|https://storage.googleapis.com/wowarenalogs-log-files-prod/|********|g' "$file"
-            git add "$file"
-      - name: Add Mask
-        run: echo "::add-mask::${{ secrets.URL_MASK }}"
-      - name: Echo a secret  
-        run: echo "your secret token is ${{ secrets.URL_MASK }}"
-          done
-          git config --global user.email "brenovaladares27@gmail.com"
-          git config --global user.name "Breno"
-          git commit -m "Replaced URLs in .py files"
+        echo "This is a secret value: $SECRET_VALUE"
+        
