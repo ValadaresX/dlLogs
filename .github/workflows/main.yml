@@ -4,8 +4,7 @@ on:
     branches:
       - main
 
-env:
-  URL_MASK: ${{ secrets.URL_MASK }}
+
 jobs:
   exemplo:
     runs-on: ubuntu-latest
@@ -14,3 +13,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         
+      - name: Add mask
+        run: |
+          echo "::add-mask::${{ secrets.URL_MASK }}"
