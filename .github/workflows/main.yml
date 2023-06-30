@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest    
     steps:
       - name: Run Commands with a Secret
-      env:
-        SECRET_VALUE: ${{ secrets.URL_MASK }
+        env:
+            SECRET_VALUE: ${{ secrets.URL__BASE }}
         run: |
-        echo "This is a secret value: $SECRET_VALUE"
-        
+          echo "Hello World"
+          echo "This is a secret value: $SECRET_VALUE"
