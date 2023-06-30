@@ -9,23 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Add Mask
+        run: echo "::add-mask::${{ secrets.SECRET_URL }}"
 
-      - name: Update URL base in main.yml
-        run: |
-          # Substitui a URL base existente por "******"
-          sed -i 's|^\(url_base = \).*|\1"******"|' dlLogs/.github/workflows/main.yml
-          
-          # Conta o número de variáveis alteradas
-          count=$(grep -r 'url_base = "******"' dlLogs/.github/workflows --include=*.py | wc -l)
-          
-          # Exibe o número de variáveis alteradas ou uma mensagem se nenhumas foram alteradas
-          if [[ $count -gt 0 ]]; then
-            echo "Number of variables changed: $count"
-          else
-            echo "No variables changed."
-          fi
+      - name: Echo a secret  
+        run: echo "your secret token is ${{ secrets.SECRET_URL }}"
         shell: bash
