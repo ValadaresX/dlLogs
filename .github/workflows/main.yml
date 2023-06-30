@@ -16,12 +16,16 @@ jobs:
     steps:
       - name: Update URL base in main.yml
         run: |
-          sed -i 's|^\(url_base = \).*|\1"******"|' main.yml
-          count=$(grep -r 'url_base = "******"' . --include=*.py | wc -l)
-          if [[ $count -gt 0 ]]; then
-            echo "Number of variables changed: $count"
+          if [[ -f "main.yml" ]]; then
+            sed -i 's|^\(url_base = \).*|\1"******"|' main.yml
+            count=$(grep -r 'url_base = "******"' . --include=*.py | wc -l)
+            if [[ $count -gt 0 ]]; then
+              echo "Number of variables changed: $count"
+            else
+              echo "No variables changed."
+            fi
           else
-            echo "No variables changed."
+            echo "main.yml file not found."
           fi
         shell: bash
 
