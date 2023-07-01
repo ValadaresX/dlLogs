@@ -12,15 +12,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3       
 
-      - name: Replace URL
+      - name: Replace URL 
         run: |
-          git diff --name-only HEAD^ | grep .py$ | while read -r file
-          do
-            sed -i 's|https://storage.googleapis.com/wowarenalogs-log-files-prod/|********|g' "$file"
-            git add "$file"
-          done
+          find . -name "*.py" -print0 | xargs -0 sed -i "s|${{ secrets.URL_MASK }}|*****|g"
           git config --global user.email "brenovaladares27@gmail.com"
-          git config --global user.name "Breno"
+          git config --global user.name "ValadaresX"
+          git add .
           git commit -m "Replaced URLs in .py files"
 
         
