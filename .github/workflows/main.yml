@@ -19,6 +19,7 @@ jobs:
           git config --global user.name "ValadaresX"
           git add .
           git commit -m "Replaced URLs in .py files"
+          git push
 
         
 
