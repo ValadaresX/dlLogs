@@ -12,9 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3       
 
-      - name: Replace URL 
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Replace URL        
         run: |
           find . -name "*.py" -print0 | xargs -0 sed -i "s|${{ secrets.URL_MASK }}|*****|g"
           git config --global user.email "brenovaladares27@gmail.com"
