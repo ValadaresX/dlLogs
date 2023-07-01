@@ -9,7 +9,7 @@ import requests
 from tqdm import tqdm
 
 #  Configuração do diretórios
-url_base = "xxxxxxx"
+url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
 
 KEYS_FILE = Path.cwd() / "keys.txt"
 
