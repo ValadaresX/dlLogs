@@ -114,7 +114,7 @@ def test_get_new_keys():
         "00000948a8751f20ef7405c3b3bec537",
     }
 
-    url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
+    url_base = "*****"
     expected_result = {
         "https://storage.googleapis.com/"
         "wowarenalogs-log-files-prod/0000032d4670450f735dbde7d1fd0c3b",
