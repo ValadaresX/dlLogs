@@ -124,7 +124,7 @@ def download_text_files(new_keys, logs_dir):
         with open(filename, "w", encoding="utf-8") as f:
             f.write(log_text)
 
-    print("Registros de log baixados com sucesso!")
+    print("Registros de log baixados com sucesso!!!")
 
 
 """
