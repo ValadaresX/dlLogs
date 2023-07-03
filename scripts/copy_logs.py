@@ -30,14 +30,15 @@ def get_status_code(response: requests.Response) -> int:
 
 def get_remote_xml_data() -> str:
     """
-    Faz uma solicitação GET a url_base e retorna o conteúdo da resposta
-    em formato de string decodificada de acordo com a codificação detectada.
-    Essa função não recebe nenhum parâmetro e sempre retorna
-    uma cadeia de caracteres.
+    Faz uma solicitação GET a url_base e retorna o conteúdo da resposta em
+    formato de string decodificada de acordo com a codificação detectada.
 
-    :return: O conteúdo da resposta em formato de string decodificada
-             de acordo com a codificação detectada.
-    :rtype: str
+    Essa função não recebe nenhum parâmetro e sempre retorna uma cadeia de
+    caracteres.
+
+    Returns:
+        str: O conteúdo da resposta em formato de string decodificada de
+        acordo com a codificação detectada.
     """
     response = requests.get(url_base)
     encoding = chardet.detect(response.content)["encoding"]
@@ -46,15 +47,18 @@ def get_remote_xml_data() -> str:
 
 def filter_key_tag(data_xml: str) -> set:
     """
-    Filtra os dados XML e extrai as chaves contidas nas tags <Key>
+    Filtra os dados XML e extrai as chaves contidas nas tags <Key>.
+
     Args:
         data_xml (str): Os dados XML a serem filtrados.
+
     Returns:
-        set: Um conjunto de chaves extraídas dos dados XML.
+        set[str]: Um conjunto de chaves extraídas dos dados XML.
+
     Example:
         >>> data = "<Contents><Key>00011f1647ad1b3ee67683f1b632da97</Key></Contents>"
         >>> filter_key_tag(data)
-        {'key1', 'key2'}
+        {'00000123456789'}
     """
     pattern = r"<Key>(.*?)</Key>"
     found_keys = re.findall(pattern, data_xml)
@@ -63,21 +67,25 @@ def filter_key_tag(data_xml: str) -> set:
 
 def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
     """
-    Recebe um conjunto de chaves no formato XML e uma base de URL como
-    entrada e retorna um novo conjunto de chaves com a base de URL
-    anexado a cada chave. O conjunto de entrada não é modificado.
-    Verifica se todos os logs já existem no diretório de logs.
+    Retorna um conjunto contendo as chaves que estão presentes em
+    'found_keys', mas não existem como arquivos de log no diretório 'logs_dir'.
 
-    param existing_keys: Um conjunto de chaves no formato XML.
-    Tipo existing_keys: set
-    param url_base: Uma cadeia de caracteres que representa a URL
-                    base a ser anexada a cada chave.
-    Tipo url_base: str
-    param logs_dir: Um objeto Path que representa o
-                    diretório em que os registros são armazenados.
-    Tipo logs_dir: Path
-    :return: Um novo conjunto de chaves com a base de URL anexada a cada chave.
-    :rtype: set
+    Args:
+        found_keys (set[str]): Conjunto de chaves encontradas.
+        url_base (str): URL base para construir as chaves ausentes.
+        logs_dir (Path): Diretório de logs onde procurar os arquivos.
+
+    Returns:
+        set[str]: Conjunto contendo as chaves ausentes que não têm
+        correspondentes nos arquivos de log.
+
+    Example:
+        found_keys = {"00000123456789", "00000123456789", "00000123456789"}
+        url_base = "https://example.com/"
+        logs_dir = Path("logs/")
+        result = get_new_keys(found_keys, url_base, logs_dir)
+        print(result)  # Output: {"https://example.com/00000123456789"
+        , "https://example.com/00000123456789"}
     """
     new_keys = set()
     for key in found_keys:
@@ -88,6 +96,26 @@ def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
 
 
 def download_text_files(new_keys, logs_dir):
+    """
+    Faz o download de arquivos de texto das URLs fornecidas em 'new_keys' e os
+    salva no diretório 'logs_dir'.
+
+    Args:
+        new_keys (list[str]): Lista de URLs dos arquivos a serem baixados.
+        logs_dir (str): Diretório onde os arquivos de log serão salvos.
+
+    Raises:
+        ValueError: Se 'new_keys' estiver vazio ou não contiver URLs válidas.
+
+    Example:
+        >>> new_keys = ["https://example.com/00000123456789"
+        , "https://example.com/00000123456789"]
+        >>> logs_dir = "/path/to/logs"
+        >>> download_text_files(new_keys, logs_dir)
+        Existem 2 registros para baixar.
+
+    """
+
     if not new_keys:
         raise ValueError("Não há novos registros para download.")
 
@@ -124,6 +152,7 @@ def download_text_files(new_keys, logs_dir):
     print("Registros de log baixados com sucesso!!!")
 
 
+"""
 def main():
     # Executar o script teste
     data = get_remote_xml_data()
@@ -134,6 +163,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-"""
 
 """
