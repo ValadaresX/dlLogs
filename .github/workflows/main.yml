@@ -14,8 +14,7 @@ jobs:
       - name: My Secret
         env:
           MY_SECRET: ${{ secrets.URL_MASK }}
-        run: |
-          echo $MY_SECRET
+        run: echo $MY_SECRET
           git config --global user.email "brenovaladares27@gmail.com"
           git config --global user.name "ValadaresX"      
           git add .
