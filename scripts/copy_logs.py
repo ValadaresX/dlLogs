@@ -9,13 +9,9 @@ import chardet
 import requests
 import schedule
 from tqdm import tqdm
-from url import url_base
+from url import url_base  # Um aquivo que so contenha a URL base
 
-#  Configuração do diretórios
-
-
-KEYS_FILE = Path.cwd() / "keys.txt"
-
+#  Configuração do diretório
 logs_dir = Path.cwd() / "logs"
 
 
@@ -128,8 +124,6 @@ def download_text_files(new_keys, logs_dir):
     print("Registros de log baixados com sucesso!!!")
 
 
-"""
-
 def main():
     # Executar o script teste
     data = get_remote_xml_data()
@@ -140,5 +134,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+"""
 
 """
