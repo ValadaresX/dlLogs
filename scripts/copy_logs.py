@@ -11,7 +11,7 @@ import schedule
 from tqdm import tqdm
 
 #  Configuração do diretórios
-url_base = os.environ.get("URL_MASK")
+url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
 
 KEYS_FILE = Path.cwd() / "keys.txt"
 
