@@ -11,9 +11,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3 
-        
-      - name: My Secret
-        run: echo ${{ secrets.URL_MASK }}
+
+      - name: Add mask
+        run: |
+          echo "::add-mask::${{ secrets.URL_MASK }}"
           
           # git config --global user.email "brenovaladares27@gmail.com"
           # git config --global user.name "ValadaresX"      
