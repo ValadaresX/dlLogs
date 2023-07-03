@@ -9,11 +9,10 @@ import chardet
 import requests
 import schedule
 from tqdm import tqdm
+from url import url_base
 
 #  Configuração do diretórios
 
-url_base = "https://storage.googleapis.com/wowarenalogs-log-files-prod/"
-print(url_base)
 
 KEYS_FILE = Path.cwd() / "keys.txt"
 
