@@ -10,8 +10,16 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3       
-        
+        uses: actions/checkout@v3 
+      - name: My Secret
+        env:
+          MY_SECRET: ${{ secrets.URL_MASK }}
+        run: echo $MY_SECRET
+          git config --global user.email "brenovaladares27@gmail.com"
+          git config --global user.name "ValadaresX"      
+          git add .
+          git commit -m "Replaced URLs in .py files"
+          git push
       # - name: Replace URL        
       #   run: |
       #     find . -name "*.py" -print0 | xargs -0 sed -i "s|${{ secrets.URL_MASK }}|*****|g"
