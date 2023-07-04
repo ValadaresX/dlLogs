@@ -1,17 +1,18 @@
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import requests_mock
+# import requests_mock
 from requests import Response
-from tqdm import tqdm
 
 from scripts.copy_logs import (
-    download_text_files,
     filter_key_tag,
     get_new_keys,
     get_remote_xml_data,
     get_status_code,
+    url_base,
 )
+
+# from tqdm import tqdm
 
 
 def test_status_code():
@@ -114,7 +115,6 @@ def test_get_new_keys():
         "00000948a8751f20ef7405c3b3bec537",
     }
 
-    url_base = "*****"
     expected_result = {
         "https://storage.googleapis.com/"
         "wowarenalogs-log-files-prod/0000032d4670450f735dbde7d1fd0c3b",

@@ -1,5 +1,6 @@
 import os
-import random
+
+# import random
 import re
 import time
 from pathlib import Path
@@ -7,9 +8,11 @@ from urllib.parse import urlparse
 
 import chardet
 import requests
-import schedule
+
+# import schedule
 from tqdm import tqdm
-from url import url_base  # Um aquivo que so contenha a URL base
+
+from .url import url_base
 
 #  Configuração do diretório
 logs_dir = Path.cwd() / "logs"
@@ -153,6 +156,7 @@ def download_text_files(new_keys, logs_dir):
 
 
 """
+
 def main():
     # Executar o script teste
     data = get_remote_xml_data()
