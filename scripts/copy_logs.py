@@ -1,6 +1,4 @@
 import os
-
-# import random
 import re
 import time
 from pathlib import Path
@@ -8,8 +6,6 @@ from urllib.parse import urlparse
 
 import chardet
 import requests
-
-# import schedule
 from tqdm import tqdm
 
 from .url import url_base
