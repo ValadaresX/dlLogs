@@ -1,10 +1,14 @@
+import os
+import tempfile
 import xml.etree.ElementTree as ET
-from pathlib import Path
+from tempfile import TemporaryDirectory
+from urllib.parse import urlparse
 
-# import requests_mock
 from requests import Response
+from requests_mock import Mocker
 
 from scripts.copy_logs import (
+    download_text_files,
     filter_key_tag,
     get_new_keys,
     get_remote_xml_data,
@@ -94,32 +98,30 @@ def test_filter_key_tag():
     assert filter_key_tag(xml_data) == expected_keys
 
 
-def test_get_new_keys():
-    """
-    Test the 'get_new_keys' function that extracts the keys from the provided
-    data XML and returns them as a set. The test compares the result of the
-    function with an expected set of keys extracted from the provided XML.
+def test_download_text_files(mocker):
+    # Cria um diretório temporário para o teste
+    with TemporaryDirectory() as tmpdir:
+        # Define as URLs de teste
+        new_keys = {
+            "https://example.com/00000U123456789",
+            "https://example.com/00000X123456790",
+        }
 
-    Args:
-        None
+        # Mock da resposta da requisição HTTP
+        mock_response = mocker.Mock()
+        mock_response.headers.get.return_value = "1024"
+        mock_response.iter_content.return_value = (b"Test content" for _ in range(1024))
 
-    Returns:
-        None
+        # Mock da função 'requests.get'
+        mocker.patch("requests.get", return_value=mock_response)
 
-    Raises:
-        AssertionError: if the validation fails.
-    """
+        # Mock da função 'chardet.detect'
+        mocker.patch("chardet.detect", return_value={"encoding": "utf-8"})
 
-    found_keys = {
-        "0000032d4670450f735dbde7d1fd0c3b",
-        "00000948a8751f20ef7405c3b3bec537",
-    }
+        # Chama a função com os parâmetros de teste
+        download_text_files(new_keys, tmpdir)
 
-    expected_result = {
-        "https://storage.googleapis.com/"
-        "wowarenalogs-log-files-prod/0000032d4670450f735dbde7d1fd0c3b",
-        "https://storage.googleapis.com/"
-        "wowarenalogs-log-files-prod/00000948a8751f20ef7405c3b3bec537",
-    }
-    logs_dir = Path.cwd() / "logs"
-    assert get_new_keys(found_keys, url_base, logs_dir) == expected_result
+        # Verifica se os arquivos foram salvos corretamente
+        for url in new_keys:
+            filename = os.path.join(tmpdir, urlparse(url).path.split("/")[-1])
+            assert os.path.isfile(filename)
