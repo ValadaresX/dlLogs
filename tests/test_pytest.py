@@ -1,11 +1,10 @@
 import os
-import tempfile
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import urlparse
 
 from requests import Response
-from requests_mock import Mocker
 
 from scripts.copy_logs import (
     download_text_files,
@@ -16,7 +15,7 @@ from scripts.copy_logs import (
     url_base,
 )
 
-# from tqdm import tqdm
+# from requests_mock import Mocker
 
 
 def test_status_code():
@@ -96,6 +95,34 @@ def test_filter_key_tag():
         "00000948a8751f20ef7405c3b3bec537",
     }
     assert filter_key_tag(xml_data) == expected_keys
+
+
+def test_get_new_keys():
+    """
+    Testa a função 'get_new_keys' que retorna um conjunto
+    de chaves ausentes com base nas chaves encontradas,
+    diretório de logs fornecido e URL base.
+    Args: None
+
+    Returns: None
+
+    Raises:
+        AssertionError: Se o resultado retornado pela função
+        não for igual ao conjunto esperado de chaves ausentes.
+    """
+    found_keys = {
+        "0000032d467045bde7d1fd0c3b",
+        "00000948a8751405c3b3bec537",
+    }
+
+    logs_dir = Path("scripts/logs/")
+
+    expected_result = {
+        url_base + "0000032d467045bde7d1fd0c3b",
+        url_base + "00000948a8751405c3b3bec537",
+    }
+
+    assert get_new_keys(found_keys, url_base, logs_dir) == expected_result
 
 
 def test_download_text_files(mocker):
