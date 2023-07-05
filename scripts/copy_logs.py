@@ -98,7 +98,7 @@ def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
     return new_keys
 
 
-def download_text_files(new_keys, logs_dir):
+def download_text_files(new_keys: set[str], logs_dir: Path) -> None:
     """
     Faz o download de arquivos de texto das URLs fornecidas em 'new_keys' e os
     salva no diretório 'logs_dir'.
