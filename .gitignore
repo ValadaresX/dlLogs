@@ -158,3 +158,5 @@ scripts/logs
 tests/logs
 url.py
 estrutura de pastas.txt
+download.xml.bak
+download.xml
