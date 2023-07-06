@@ -1,6 +1,6 @@
 # Script de Download de Logs
 
-Este script em Python realiza o download de logs de um servidor remoto. Ele busca um arquivo XML no servidor que contém informações sobre os logs disponíveis. Em seguida, verifica quais logs estão ausentes no diretório local e faz o download apenas dos logs que ainda não foram baixados. A segunda parte do projeto é converter os logs em algum arquivo para analisar os dados, essa parte esta em desenvolvimento. 
+Este script em Python realiza o download de logs de um servidor remoto. Ele busca um arquivo XML no servidor que contém informações sobre os logs disponíveis. Em seguida, verifica quais logs estão ausentes no diretório local e faz o download apenas dos logs que ainda não foram baixados. No entanto, a segunda parte do projeto, que consiste na conversão dos logs em um arquivo para análise dos dados, está em desenvolvimento.
 
 ## Pré-requisitos
 
