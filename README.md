@@ -1,6 +1,6 @@
 # Uma Ferramenta de Download de Logs para Análise e Monitoramento
 
-Descrição: O dlLogs é uma aplicação projetada para tornar o processo de download e análise de logs de um servidor específico fácil de usar. Com essa ferramenta, você pode baixar os logs de forma rápida e eficiente, além de converter o formato para JSON.
+Descrição: O dlLogs é uma aplicação projetada para tornar o processo de download e análise de logs de registro de combate do jogo World of Warcraft, ele baixa os logs de um servidor específico (confidencial). Com essa ferramenta, você pode baixar os logs de forma rápida e eficiente, além de converter o formato para JSON.
 
 ## Pré-requisitos
 
