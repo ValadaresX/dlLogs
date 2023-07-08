@@ -1,6 +1,6 @@
-# Script de Download de Logs
+# Uma Ferramenta de Download de Logs para Análise e Monitoramento
 
-Este script em Python realiza o download de logs de um servidor remoto. Ele busca um arquivo XML no servidor que contém informações sobre os logs disponíveis. Em seguida, verifica quais logs estão ausentes no diretório local e faz o download apenas dos logs que ainda não foram baixados. No entanto, a segunda parte do projeto, que consiste na conversão dos logs em um arquivo para análise dos dados, está em desenvolvimento.
+Descrição: dlLogs é uma aplicação robusta e fácil de usar, projetada para baixar e analisar logs de servidores. Com ela, você pode facilmente monitorar, rastrear e solucionar problemas em tempo real, melhorando a eficiência e a produtividade da sua equipe de TI.
 
 ## Pré-requisitos
 
