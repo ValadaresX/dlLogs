@@ -1,6 +1,6 @@
 # Uma Ferramenta de Download de Logs para Análise e Monitoramento
 
-Descrição: dlLogs é uma aplicação robusta e fácil de usar, projetada para baixar e analisar logs de servidores. Com ela, você pode facilmente monitorar, rastrear e solucionar problemas em tempo real, melhorando a eficiência e a produtividade da sua equipe de TI.
+Descrição: O dlLogs é uma aplicação projetada para tornar o processo de download e análise de logs de um servidor específico fácil de usar. Com essa ferramenta, você pode baixar os logs de forma rápida e eficiente, além de converter o formato para JSON.
 
 ## Pré-requisitos
 
@@ -21,6 +21,18 @@ Antes de executar o script, é necessário configurar as seguintes variáveis:
 
 - `URL_BASE`: URL base do servidor remoto onde os logs estão armazenados, deve se criado um arquivo 'url.py' no mesmo diretório do "copy_logs.py".
 - `logs_dir`: Diretório onde os logs serão salvos. O valor padrão é um subdiretório chamado "logs" no diretório de trabalho.
+
+## Futuras implementações
+
+- [x] Finalização do aquivo de download.
+- [x] Implementação de barra de progresso do download.
+- [x] Finalização das docstring do arquivo de download.
+- [x] Finalização para os testes unitários do script de download.
+- [x] Refatorar o código.
+- [ ] Finalização do aquivo de conversão de logs.
+- [ ] Finalização da interface gráfica. 
+
+
 
 ## Uso
 
