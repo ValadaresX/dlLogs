@@ -1,10 +1,12 @@
-# Uma Ferramenta de Download de Logs para Análise e Monitoramento
+# dlLogs - A Log Download Tool for Analysis and Monitoring
 
-Descrição: O dlLogs é uma aplicação projetada para tornar o processo de download e análise de logs de registro de combate do jogo World of Warcraft, ele baixa os logs de um servidor específico (confidencial). Com essa ferramenta, você pode baixar os logs de forma rápida e eficiente, além de converter o formato para JSON.
+## Description
 
-## Pré-requisitos
+dlLogs is an application designed to streamline the process of downloading and analyzing combat logs from the game World of Warcraft. It downloads logs from a specific server (confidential) and allows you to quickly and efficiently convert them to JSON format.
 
-Certifique-se de ter instalado o Python 3.11 e as seguintes bibliotecas:
+## Prerequisites
+
+Make sure you have Python 3.11 installed, along with the following libraries:
 
 - `os`
 - `re`
@@ -14,37 +16,33 @@ Certifique-se de ter instalado o Python 3.11 e as seguintes bibliotecas:
 - `urlparse`
 - `requests`
 
+## Configuration
 
-## Configuração
+Before running the script, you need to configure the following variables:
 
-Antes de executar o script, é necessário configurar as seguintes variáveis:
+- `url_base`: Base URL of the remote server where the logs are stored. Create a file named 'url.py' in the same directory as "copy_logs.py".
+- `logs_dir`: Directory where the logs will be saved. The default value is a subdirectory called "logs" in the working directory.
 
-- `URL_BASE`: URL base do servidor remoto onde os logs estão armazenados, deve se criado um arquivo 'url.py' no mesmo diretório do "copy_logs.py".
-- `logs_dir`: Diretório onde os logs serão salvos. O valor padrão é um subdiretório chamado "logs" no diretório de trabalho.
+## Future Implementations
 
-## Futuras implementações
+- [x] Completion of the download file.
+- [x] Implementation of download progress bar.
+- [x] Completion of the download file's docstrings.
+- [x] Completion of unit tests for the download script.
+- [x] Code refactoring.
+- [ ] Completion of the log conversion file.
+- [ ] Completion of the graphical interface.
 
-- [x] Finalização do aquivo de download.
-- [x] Implementação de barra de progresso do download.
-- [x] Finalização das docstring do arquivo de download.
-- [x] Finalização para os testes unitários do script de download.
-- [x] Refatorar o código.
-- [ ] Finalização do aquivo de conversão de logs.
-- [ ] Finalização da interface gráfica. 
+## Usage
 
+To run the script, simply execute the Python file `copy_logs.py`. The logs will be downloaded to the directory specified in `logs_dir`.
 
+During execution, the script checks if all logs are present on the disk. If any logs are missing, they will be downloaded. Otherwise, a message indicating that all logs are present will be displayed.
 
-## Uso
+The script also runs at regular intervals between 8 and 10 hours. During this interval, a countdown will be displayed. After the countdown ends, the script will check for and download new logs if available.
 
-Para executar o script, basta executar o arquivo Python `copy_logs.py`. Os logs serão baixados para o diretório especificado em `logs_dir`.
+## Notes
 
-Durante a execução, o script verifica se todos os logs estão presentes no disco. Se algum log estiver faltando, ele será baixado. Caso contrário, uma mensagem informando que todos os logs estão presentes será exibida.
-
-O script também é executado em intervalos regulares entre 8 e 10 horas. Durante esse intervalo, uma contagem regressiva será exibida. Após o término da contagem, o script verificará e baixará novos logs, se disponíveis.
-
-## Observações
-
-- O script assume que a codificação dos arquivos de log é UTF-8. Caso contrário, ele tentará detectar a codificação correta usando a biblioteca `chardet`.
-- O tamanho máximo de cada arquivo de log a ser lido é definido por `chunk_size`. Arquivos maiores serão lidos parcialmente.
-- O progresso do download é exibido usando a biblioteca `tqdm`.
-
+- The script assumes that the log files are encoded in UTF-8. Otherwise, it will attempt to detect the correct encoding using the `chardet` library.
+- The maximum size of each log file to be read is defined by `chunk_size`. Larger files will be read partially.
+- Download progress is displayed using the `tqdm` library.
