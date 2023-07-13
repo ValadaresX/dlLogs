@@ -31,10 +31,13 @@ def argCount(line):
 
 def eventArgLengthDictionary(lines):
     eventTypes = defaultdict(set)
+
     for line in lines:
         match = splitEvent(line)
-        args = match.group(4).split(",")
-        eventTypes[match.group(3)].add(len(args))
+        if match is not None:  # Adicione uma verificação para None
+            args = match.group(4).split(",")
+            eventTypes[match.group(3)].add(len(args))
+
     return eventTypes
 
 
