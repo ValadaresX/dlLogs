@@ -1,4 +1,5 @@
 import datetime
+import re
 import shlex
 import time
 
@@ -806,17 +807,19 @@ class EncountParser:
                 - "encounterName": O nome do encontro.
                 - "difficultyID": O ID da dificuldade do encontro.
                 - "groupSize": O tamanho do grupo.
-                - "success" (opcional): Um valor booleano indicando se o e
-                ncontro foi bem-sucedido.
+                - "success" (opcional): Um valor booleano indicando se o
+                encontro foi bem-sucedido.
         """
         obj = {
             "encounterID": cols[0],
             "encounterName": cols[1],
             "difficultyID": cols[2],
             "groupSize": cols[3],
+            "fightTime": cols[5],
         }
         if len(cols) == 5:
             obj["success"] = cols[4] == "1"
+
         return obj
 
 
@@ -930,8 +933,6 @@ class Parser:
             "SPELL": SpellParser(),
             "RANGE": SpellParser(),
             "ENVIRONMENTAL": EnvParser(),
-            "ARENA_MATCH_START": ArenaMatchStartParser(),
-            "ARENA_MATCH_END": ArenaMatchEndParser(),
         }
         self.ev_suffix = {
             "_DAMAGE": DamageParser(),
@@ -976,6 +977,10 @@ class Parser:
             "ENCOUNTER_START": EncountParser(),
             "ENCOUNTER_END": EncountParser(),
         }
+        self.arena_event = {
+            "ARENA_MATCH_START": ArenaMatchStartParser(),
+            "ARENA_MATCH_END": ArenaMatchEndParser(),
+        }
 
     def parse_line(self, line):
         """
@@ -991,8 +996,10 @@ class Parser:
             Exception: Se o formato da linha for inválido.
 
         """
-        terms = line.split(" ")
-        print(terms)  # Teste
+        terms = line.replace(" ", ",", 1).replace("  ", ",", 1).replace(" ", "  ")
+        terms = terms.split(",")
+        terms[-1] = terms[-1].rstrip()
+        print(terms)
         if len(terms) < 4:
             raise Exception("invalid format, " + line)
 
@@ -1007,17 +1014,18 @@ class Parser:
 
         # split CSV data
         csv_txt = " ".join(terms[3:]).strip()
+        print(csv_txt + " csv_txt")
         splitter = shlex.shlex(csv_txt, posix=True)
         splitter.whitespace = ","
         splitter.whitespace_split = True
         cols = list(splitter)
         obj = self.parse_cols(ts, cols)
-        """
+
         if obj["event"] == "SPELL_AURA_APPLIED":
             print(obj)
             for i in range(len(cols)):
                 print(i), cols[i]
-        """
+
         return obj
 
     def parse_cols(self, ts, cols):
@@ -1044,13 +1052,6 @@ class Parser:
             }
             obj.update(self.enc_event[event].parse(cols[1:]))
             return obj
-        # Se o evento for "ARENA_MATCH_START" ou "COMBATANT_INFO" pule o evento
-        if (
-            event == "ARENA_MATCH_START"
-            or event == "COMBATANT_INFO"
-            or event == "ARENA_MATCH_END"
-        ):
-            return {}
 
         if len(cols) < 8:
             raise Exception("invalid format, " + repr(cols))
