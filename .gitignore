@@ -168,4 +168,6 @@ scripts/test.txt
 scripts/test.py
 scripts/no-use-case.py
 scripts/keys.txt
-scripts/keys.txt
+documentation_combat_log_event.md
+
+scripts/test.txt.bak

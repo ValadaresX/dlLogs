@@ -1,7 +1,7 @@
 import datetime
-import re
 import shlex
 import time
+from pprint import pprint
 
 
 # Estou atualizando essa funcao com os dados do aquivo "wowpedia.md"
@@ -52,18 +52,6 @@ def resolv_power_type(pt):
 
 
 def parse_unit_flag(flag):
-    """
-    Analisa os sinalizadores de unidade e os mapeia para seus respectivos nomes.
-
-    Args:
-        flag (str): O sinalizador de unidade.
-
-    Returns:
-        str: O nome correspondente ao sinalizador de unidade.
-
-    Raises:
-        KeyError: Se o sinalizador de unidade fornecido não for reconhecido.
-    """
     if isinstance(flag, str):
         f = int(flag, 0)
     else:
@@ -74,32 +62,30 @@ def parse_unit_flag(flag):
         return res
 
     flag_map = {
-        0x00004000: "TYPE_OBJECT",
-        0x00002000: "TYPE_GUARDIAN",
-        0x00001000: "TYPE_PET",
-        0x00000800: "TYPE_NPC",
-        0x00000400: "TYPE_PLAYER",
-        0x00000200: "CONTROL_NPC",
-        0x00000100: "CONTROL_PLAYER",
-        0x00000040: "REACTION_HOSTILE",
-        0x00000020: "REACTION_NEUTRAL",
-        0x00000010: "REACTION_FRIENDLY",
-        0x00000008: "AFFILIATION_OUTSIDER",
-        0x00000004: "AFFILIATION_RAID",
-        0x00000002: "AFFILIATION_PARTY",
         0x00000001: "AFFILIATION_MINE",
-        0x08000000: "RAIDTARGET8",
-        0x04000000: "RAIDTARGET7",
-        0x02000000: "RAIDTARGET6",
-        0x01000000: "RAIDTARGET5",
-        0x00800000: "RAIDTARGET4",
-        0x00400000: "RAIDTARGET3",
-        0x00200000: "RAIDTARGET2",
-        0x00100000: "RAIDTARGET1",
-        0x00080000: "MAINASSIST",
-        0x00040000: "MAINTANK",
-        0x00020000: "FOCUS",
+        0x00000002: "AFFILIATION_PARTY",
+        0x00000004: "AFFILIATION_RAID",
+        0x00000008: "AFFILIATION_OUTSIDER",
+        0x0000000F: "AFFILIATION_MASK",
+        0x00000010: "REACTION_FRIENDLY",
+        0x00000020: "REACTION_NEUTRAL",
+        0x00000040: "REACTION_HOSTILE",
+        0x000000F0: "REACTION_MASK",
+        0x00000100: "CONTROL_PLAYER",
+        0x00000200: "CONTROL_NPC",
+        0x00000300: "CONTROL_MASK",
+        0x00000400: "TYPE_PLAYER",
+        0x00000800: "TYPE_NPC",
+        0x00001000: "TYPE_PET",
+        0x00002000: "TYPE_GUARDIAN",
+        0x00004000: "TYPE_OBJECT",
+        0x0000FC00: "TYPE_MASK",
         0x00010000: "TARGET",
+        0x00020000: "FOCUS",
+        0x00040000: "MAINTANK",
+        0x00080000: "MAINASSIST",
+        0x00800000: "NONE",  # Whether the unit does not exist.
+        0x0FF00000: "SPECIAL_MASK",
     }
 
     for k, v in flag_map.items():
@@ -111,18 +97,6 @@ def parse_unit_flag(flag):
 
 
 def parse_school_flag(school):
-    """
-    Analisa os sinalizadores escolares e os mapeia para seus respectivos nomes.
-
-    Args:
-        school (str): O sinalizador escolar.
-
-    Returns:
-        str: O nome correspondente ao sinalizador escolar.
-
-    Raises:
-        KeyError: Se o sinalizador escolar fornecido não for reconhecido.
-    """
     s = int(school, 0) if isinstance(school, str) else school
 
     res = []
@@ -151,32 +125,6 @@ Prefix Parser Set
 
 
 class SpellParser:
-    """
-    Classe que analisa uma linha que contém informações sobre um evento de feitiço.
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        parse(cols): Analisa a lista de colunas fornecida e
-        retorna um dicionário contendoas informações
-        ortográficas analisadas e uma lista das colunas restantes.
-
-    Exemplo:
-        parser = SpellParser()
-        cols = ["12345", "Fireball", "Fire", "Some", "Extra", "Columns"]
-        result = parser.parse(cols)
-        print(result)
-        # Output: (
-        #   {
-        #       "spellId": "12345",
-        #       "spellName": "Fireball",
-        #       "spellSchool": "Fire"
-        #   },
-        #   ["Some", "Extra", "Columns"]
-        # )
-    """
-
     def __init__(self):
         pass
 
@@ -192,27 +140,6 @@ class SpellParser:
 
 
 class EnvParser:
-    """
-    Uma classe que analisa eventos ambientais.
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        __init__(self)
-            Inicializa uma instância da classe EnvParser.
-
-        parse(self, cols)
-            Analisa as colunas fornecidas e retorna uma tupla
-            contendo os dados analisados.
-
-    Exemplo:
-        parser = EnvParser()
-        cols = ['FIRE', 'Some data']
-        result = parser.parse(cols)
-        print(result) # Saída: ({"environmentalType": "FIRE"}, ['Some data'])
-    """
-
     def __init__(self):
         pass
 
@@ -267,27 +194,7 @@ class DamageParser:
 
     def parse(self, cols):
         cols = cols[8:]
-        """
-        Analisa as informações de dano das colunas fornecidas.
 
-        Args:
-            cols (lista): Uma lista de colunas que contém as informações de danos.
-
-        Retorna:
-            dict: Um dicionário que contém os dados de dano
-                analisados com as seguintes chaves:
-                - "amount": A quantidade de dano.
-                - "overkill": O valor de overkill.
-                - "school" (escola): A escola de dano.
-                - "resisted" (resistido): A quantidade de dano resistido.
-                - "blocked" (bloqueado): A quantidade de dano bloqueado.
-                - "absorbed" (absorvido): A quantidade de dano absorvido.
-                - "critical" (crítico): Um booleano que indica se o dano foi crítico.
-                - "glancing" (de relance): Um booleano que indica se o
-                dano foi de relance.
-                - "crushing" (esmagador): Um booleano que
-                indica se o dano foi esmagador.
-        """
         return {
             "amount": int(cols[0]),
             "overkill": cols[1],
@@ -330,49 +237,10 @@ class MissParser:
 
 
 class HealParser:
-    """
-    Uma classe que analisa colunas de dados relacionadas a eventos de cura.
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        __init__(self): Inicializa uma instância do HealParser.
-        parse(self, cols): Analisa as colunas de dados fornecidas e retorna
-        um dicionário com os valores analisados.
-    Example:
-        parser = HealParser()
-        cols = ["col1", "col2", "col3", "col4", "col5", "col6",
-        "col7", "col8", "amount", "overhealing", "absorbed", "critical"]
-        parsed_data = parser.parse(cols)
-        print(parsed_data)  # Output: {'amount': int(cols[8]),
-        'overhealing': int(cols[9]), 'absorbed': int(cols[10]),
-        'critical': (cols[11] != "nil")}
-    """
-
     def __init__(self):
         pass
 
     def parse(self, cols):
-        """
-        Analisa as colunas de dados fornecidas e retorna um
-        dicionário com os valores analisados.
-
-        Args:
-            cols (lista): As colunas de dados a serem analisadas.
-
-        Retorna:
-            dict: Um dicionário que contém os valores analisados.
-
-        Example:
-            parser = HealParser()
-            cols = ["col1", "col2", "col3", "col4", "col5", "col6",
-            "col7", "col8", "amount", "overhealing", "absorbed", "critical"]
-            parsed_data = parser.parse(cols)
-            print(parsed_data)  # Output: {'amount': int(cols[8]),
-            'overhealing': int(cols[9]), 'absorbed': int(cols[10]),
-            'critical': (cols[11] != "nil")}
-        """
         cols = cols[8:]
         return {
             "amount": int(cols[0]),
@@ -601,27 +469,6 @@ class ExtraAttackParser:
 
 
 class AuraParser:
-    """
-    Classe responsável por analisar eventos de aura.
-
-    Methods:
-        __init__(self): Inicializa a classe.
-        parse(self, cols): Analisa os dados do evento de aura.
-
-    Args:
-        cols (list): Lista de colunas contendo os dados do evento.
-
-    Returns:
-        dict: Um dicionário contendo as informações do evento de aura.
-
-    Example:
-        >>> parser = AuraParser()
-        >>> cols = ["Buff", "10", "Extra1", "Extra2"]
-        >>> result = parser.parse(cols)
-        >>> print(result)  # Output: {"auraType": "Buff", "amount": 10,
-        "auraExtra1": "Extra1", "auraExtra2": "Extra2"}
-    """
-
     def __init__(self):
         pass
 
@@ -874,6 +721,14 @@ class ArenaMatchEndParser:
         return obj
 
 
+class CombatantInfoParser:
+    def __init__(self):
+        pass
+
+    def parse(self, cols):
+        return {"COMBATANT_INFO": " ".join(cols)}
+
+
 class VoidSuffixParser:
     """
     Classe responsável por analisar um sufixo de evento do tipo "Void".
@@ -900,6 +755,24 @@ class VoidSuffixParser:
 
     def parse(self, cols):
         return {}
+
+
+class SpellAbsorbedParser:
+    def __init__(self):
+        pass
+
+    def parse(self, cols):
+        return {
+            "casterGUID": cols[0],
+            "casterName": cols[1],
+            "casterFlags": parse_unit_flag(cols[2]),
+            "casterFlags2": parse_unit_flag(cols[3]),
+            "absorbSpellId": cols[4],
+            "absorbSpellName": cols[5],
+            "absorbSpellSchool": parse_school_flag(cols[6]),
+            "amount": int(cols[7]),
+            "critical": cols[8] != "nil",
+        }
 
 
 class Parser:
@@ -936,6 +809,7 @@ class Parser:
         }
         self.ev_suffix = {
             "_DAMAGE": DamageParser(),
+            "_DAMAGE_LANDED": DamageParser(),
             "_MISSED": MissParser(),
             "_HEAL": HealParser(),
             "_ENERGIZE": EnergizeParser(),
@@ -962,6 +836,7 @@ class Parser:
             "_CREATE": VoidSuffixParser(),
             "_SUMMON": VoidSuffixParser(),
             "_RESURRECT": VoidSuffixParser(),
+            "_ABSORBED": SpellAbsorbedParser(),
         }
         self.sp_event = {
             "DAMAGE_SHIELD": (SpellParser(), DamageParser()),
@@ -973,6 +848,9 @@ class Parser:
             "UNIT_DIED": (VoidParser(), VoidSuffixParser()),
             "UNIT_DESTROYED": (VoidParser(), VoidSuffixParser()),
         }
+        self.combat_player_info = {
+            "COMBATANT_INFO": CombatantInfoParser(),
+        }
         self.enc_event = {
             "ENCOUNTER_START": EncountParser(),
             "ENCOUNTER_END": EncountParser(),
@@ -983,23 +861,12 @@ class Parser:
         }
 
     def parse_line(self, line):
-        """
-        Analisa uma linha do arquivo de log.
+        # Essa linha resolve o problema do matchType contendo espaços
+        if "Rated Solo Shuffle" in line:
+            line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
 
-        Args:
-            line (str): A linha do arquivo de log a ser analisada.
+        terms = line.split(" ")
 
-        Returns:
-            dict: Um dicionário contendo os dados analisados do evento.
-
-        Raises:
-            Exception: Se o formato da linha for inválido.
-
-        """
-        terms = line.replace(" ", ",", 1).replace("  ", ",", 1).replace(" ", "  ")
-        terms = terms.split(",")
-        terms[-1] = terms[-1].rstrip()
-        print(terms)
         if len(terms) < 4:
             raise Exception("invalid format, " + line)
 
@@ -1014,43 +881,35 @@ class Parser:
 
         # split CSV data
         csv_txt = " ".join(terms[3:]).strip()
-        print(csv_txt + " csv_txt")
+
+        # print(csv_txt + " csv_txt")
         splitter = shlex.shlex(csv_txt, posix=True)
+
         splitter.whitespace = ","
         splitter.whitespace_split = True
         cols = list(splitter)
         obj = self.parse_cols(ts, cols)
+        print(obj)
 
+        """
         if obj["event"] == "SPELL_AURA_APPLIED":
             print(obj)
             for i in range(len(cols)):
                 print(i), cols[i]
-
+        """
         return obj
 
     def parse_cols(self, ts, cols):
-        """
-        Analisa uma lista de colunas CSV e determina o tipo de evento.
-
-        Args:
-            ts (float): O timestamp do evento.
-            cols (list): A lista de colunas CSV do evento.
-
-        Returns:
-            dict: Um dicionário contendo os dados analisados do evento.
-
-        Raises:
-            Exception: Se o formato da lista de colunas for inválido.
-
-        """
         event = cols[0]
 
-        if self.enc_event.get(event):
+        event_map = {**self.enc_event, **self.arena_event, **self.combat_player_info}
+
+        if event in event_map:
             obj = {
                 "timestamp": ts,
                 "event": event,
             }
-            obj.update(self.enc_event[event].parse(cols[1:]))
+            obj.update(event_map[event].parse(cols[1:]))
             return obj
 
         if len(cols) < 8:
@@ -1087,7 +946,8 @@ class Parser:
                 if event == k:
                     (prefix_psr, suffix_psr) = psrs
                     break
-
+        print(prefix_psr)
+        print(suffix_psr)
         if prefix_psr is None or suffix_psr is None:
             raise Exception("Unknown event format, " + repr(cols))
 
@@ -1105,23 +965,19 @@ class Parser:
         return obj
 
     def read_file(self, fname):
-        """
-        Lê um arquivo e produz cada linha após analisá-lo.
-        Parâmetros:
-            fname (str): O nome do arquivo a ser lido.
-        Fornece:
-            LineType: Um objeto que representa cada linha após a análise.
-        Retorna:
-            Nenhum
-        """
-        for line in open(fname, "r"):
-            yield self.parse_line(line)
+        with open(fname, "r") as file:
+            for line in file:
+                # Ignora linhas vazias ou que contém apenas espaços em branco
+                if line.strip():
+                    yield self.parse_line(line)
 
 
 if __name__ == "__main__":
-    import sys
+    import os
 
     p = Parser()
-    for arg in sys.argv[1:]:
-        for a in p.read_file(arg):
-            pass
+    dirname = os.path.dirname(__file__)
+    filename = os.path.join(dirname, "test.txt")
+
+    for a in p.read_file(filename):
+        pass
