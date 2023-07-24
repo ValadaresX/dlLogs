@@ -1,7 +1,8 @@
 import datetime
+import json
+import os
 import shlex
 import time
-from pprint import pprint
 
 
 # Estou atualizando essa funcao com os dados do aquivo "wowpedia.md"
@@ -474,7 +475,7 @@ class AuraParser:
 
     def parse(self, cols):
         if len(cols) > 4:
-            print(self.raw)
+            # print(self.raw)
             print(cols)
 
         obj = {
@@ -720,36 +721,36 @@ class ArenaMatchEndParser:
         }
         return obj
 
+    def parse(self, data):
+        print("<<<<<<line>>>>>>")
+        print(data)
+        print(type(data))
 
-class CombatantInfoParser:
-    def __init__(self):
-        pass
+        name = data[:0]
+        faction = data[:1]
+        stats = self._parse_stats(data[2:24])
+        talents = self._parse_talents(data[24:27])
+        artifact_traits = self._parse_artifact_traits(data[27:28])
+        equipment = self._parse_equipment(data[28:46])
+        auras = self._parse_aura(data[46:49])
+        honor_level, season, rating, tier = map(int, data[49:53])
 
-    def parse(self, cols):
-        return {"COMBATANT_INFO": " ".join(cols)}
+        return {
+            "name": name,
+            "faction": faction,
+            "stats": stats,
+            "talents": talents,
+            "artifact_traits": artifact_traits,
+            "equipment": equipment,
+            "auras": auras,
+            "honor_level": honor_level,
+            "season": season,
+            "rating": rating,
+            "tier": tier,
+        }
 
 
 class VoidSuffixParser:
-    """
-    Classe responsável por analisar um sufixo de evento do tipo "Void".
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        __init__(self):
-            Inicializa uma instância da classe VoidSuffixParser.
-
-        parse(self, cols):
-            Analisa as colunas fornecidas e retorna um dicionário vazio.
-
-    Exemplo:
-        parser = VoidSuffixParser()
-        cols = ["timestamp", "event", "source", "target", "extra_data"]
-        result = parser.parse(cols)
-        print(result)  # Saída: {}
-    """
-
     def __init__(self):
         pass
 
@@ -838,6 +839,10 @@ class Parser:
             "_RESURRECT": VoidSuffixParser(),
             "_ABSORBED": SpellAbsorbedParser(),
         }
+
+        self.combat_player_info = {
+            "COMBATANT_INFO": CombatantInfoParser(),
+        }
         self.sp_event = {
             "DAMAGE_SHIELD": (SpellParser(), DamageParser()),
             "DAMAGE_SPLIT": (SpellParser(), DamageParser()),
@@ -848,9 +853,7 @@ class Parser:
             "UNIT_DIED": (VoidParser(), VoidSuffixParser()),
             "UNIT_DESTROYED": (VoidParser(), VoidSuffixParser()),
         }
-        self.combat_player_info = {
-            "COMBATANT_INFO": CombatantInfoParser(),
-        }
+
         self.enc_event = {
             "ENCOUNTER_START": EncountParser(),
             "ENCOUNTER_END": EncountParser(),
@@ -912,6 +915,9 @@ class Parser:
             obj.update(event_map[event].parse(cols[1:]))
             return obj
 
+        elif event == "COMBATANT_INFO":
+            return self.parse_combatant_info(ts, cols)
+
         if len(cols) < 8:
             raise Exception("invalid format, " + repr(cols))
         obj = {
@@ -920,11 +926,11 @@ class Parser:
             "sourceGUID": cols[1],
             "sourceName": cols[2],
             "sourceFlags": parse_unit_flag(cols[3]),
-            "sourceFlags2": parse_unit_flag(cols[4]),
+            "sourceRaidFlags": parse_unit_flag(cols[4]),
             "destGUID": cols[5],
             "destName": cols[6],
             "destFlags": parse_unit_flag(cols[7]),
-            "destFlags2": parse_unit_flag(cols[8]),
+            "destRaidFlags": parse_unit_flag(cols[8]),
         }
 
         suffix = ""
@@ -972,12 +978,68 @@ class Parser:
                     yield self.parse_line(line)
 
 
-if __name__ == "__main__":
-    import os
+class CombatantInfoParser:
+    def parse_combatant_info(self, ts, cols):
+        name = cols[0]
+        faction = int(cols[1])
+        stats = {
+            "level": int(cols[2]),
+            "class": int(cols[3]),
+            "health": int(cols[4]),
+            "mana": int(cols[5]),
+            "strength": int(cols[6]),
+            "agility": int(cols[7]),
+            "intelligence": int(cols[8]),
+            "armor": int(cols[9]),
+        }
+        talents = cols[10:26]  # Adjust as necessary
+        artifact_traits = cols[26:27]  # Adjust as necessary
+        equipment = [
+            {
+                "item_id": int(item[0]),
+                "ilvl": int(item[1]),
+                "enchantments": item[2],
+                "bonuses": item[3],
+                "gems": item[4],
+            }
+            for item in cols[27:73]  # Adjust as necessary
+        ]
+        auras = [
+            {
+                "aura_caster_guid": aura[0],
+                "aura_spell_id": int(aura[1]),
+            }
+            for aura in cols[73:90]  # Adjust as necessary
+        ]
+        honor_level, season, rating, tier = map(int, cols[90:94])
 
+        return {
+            "timestamp": ts,
+            "event": "COMBATANT_INFO",
+            "name": name,
+            "faction": faction,
+            "stats": stats,
+            "talents": talents,
+            "artifact_traits": artifact_traits,
+            "equipment": equipment,
+            "auras": auras,
+            "honor_level": honor_level,
+            "season": season,
+            "rating": rating,
+            "tier": tier,
+        }
+
+
+if __name__ == "__main__":
     p = Parser()
     dirname = os.path.dirname(__file__)
-    filename = os.path.join(dirname, "test.txt")
+    input_filename = os.path.join(dirname, "test.txt")
+    output_filename = os.path.join(dirname, "output.json")
 
-    for a in p.read_file(filename):
-        pass
+    results = []
+    for a in p.read_file(input_filename):
+        # Here I assume `a` is a dictionary like your provided example
+        results.append(a)
+
+    with open(output_filename, "w") as json_file:
+        json.dump(results, json_file, indent=4)
