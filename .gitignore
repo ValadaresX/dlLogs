@@ -171,3 +171,5 @@ scripts/keys.txt
 documentation_combat_log_event.md
 
 scripts/test.txt.bak
+scripts/output.json
+scripts/exemplo.json
