@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 import shlex
 import time
 
@@ -721,34 +722,6 @@ class ArenaMatchEndParser:
         }
         return obj
 
-    def parse(self, data):
-        print("<<<<<<line>>>>>>")
-        print(data)
-        print(type(data))
-
-        name = data[:0]
-        faction = data[:1]
-        stats = self._parse_stats(data[2:24])
-        talents = self._parse_talents(data[24:27])
-        artifact_traits = self._parse_artifact_traits(data[27:28])
-        equipment = self._parse_equipment(data[28:46])
-        auras = self._parse_aura(data[46:49])
-        honor_level, season, rating, tier = map(int, data[49:53])
-
-        return {
-            "name": name,
-            "faction": faction,
-            "stats": stats,
-            "talents": talents,
-            "artifact_traits": artifact_traits,
-            "equipment": equipment,
-            "auras": auras,
-            "honor_level": honor_level,
-            "season": season,
-            "rating": rating,
-            "tier": tier,
-        }
-
 
 class VoidSuffixParser:
     def __init__(self):
@@ -777,28 +750,6 @@ class SpellAbsorbedParser:
 
 
 class Parser:
-    """Classe responsável por analisar os dados do log de combate do World of Warcraft.
-
-    Args:
-        ev_prefix (dict): Dicionário que mapeia os prefixos de evento para as
-        classes de analisador correspondentes.
-        ev_suffix (dict): Dicionário que mapeia os sufixos de evento para as
-        classes de analisador correspondentes.
-        sp_event (dict): Dicionário que mapeia os eventos especiais para as
-        classes de analisador correspondentes.
-        enc_event (dict): Dicionário que mapeia os eventos de encontro para
-        as classes de analisador correspondentes.
-
-    Methods:
-        parse_line(line): Analisa uma única linha do arquivo de log e retorna
-        um dicionário com os dados do evento analisado.
-        parse_cols(ts, cols): Analisa um registro de data e hora e uma lista
-        de colunas CSV e retorna um dicionário com os dados do evento analisado.
-        read_file(fname): Lê um arquivo de log linha por linha e produz os
-        dados do evento analisados.
-
-    """
-
     def __init__(self):
         self.ev_prefix = {
             "SWING": SwingParser(),
@@ -841,7 +792,7 @@ class Parser:
         }
 
         self.combat_player_info = {
-            "COMBATANT_INFO": CombatantInfoParser(),
+            "COMBATANT_INFO": CombatantInfoParser(self),
         }
         self.sp_event = {
             "DAMAGE_SHIELD": (SpellParser(), DamageParser()),
@@ -867,6 +818,8 @@ class Parser:
         # Essa linha resolve o problema do matchType contendo espaços
         if "Rated Solo Shuffle" in line:
             line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
+        # Substituir ',' por '@' dentro dos parênteses
+        line = re.sub(r"\(([^)]*)\)", lambda m: m.group().replace(",", "@"), line)
 
         terms = line.split(" ")
 
@@ -904,8 +857,10 @@ class Parser:
 
     def parse_cols(self, ts, cols):
         event = cols[0]
-
         event_map = {**self.enc_event, **self.arena_event, **self.combat_player_info}
+
+        if event == "COMBATANT_INFO":
+            return self.parse_combatant_info(ts, cols)
 
         if event in event_map:
             obj = {
@@ -977,57 +932,69 @@ class Parser:
                 if line.strip():
                     yield self.parse_line(line)
 
-
-class CombatantInfoParser:
     def parse_combatant_info(self, ts, cols):
-        name = cols[0]
-        faction = int(cols[1])
-        stats = {
-            "level": int(cols[2]),
-            "class": int(cols[3]),
-            "health": int(cols[4]),
-            "mana": int(cols[5]),
-            "strength": int(cols[6]),
-            "agility": int(cols[7]),
-            "intelligence": int(cols[8]),
-            "armor": int(cols[9]),
-        }
-        talents = cols[10:26]  # Adjust as necessary
-        artifact_traits = cols[26:27]  # Adjust as necessary
-        equipment = [
-            {
-                "item_id": int(item[0]),
-                "ilvl": int(item[1]),
-                "enchantments": item[2],
-                "bonuses": item[3],
-                "gems": item[4],
-            }
-            for item in cols[27:73]  # Adjust as necessary
-        ]
-        auras = [
-            {
-                "aura_caster_guid": aura[0],
-                "aura_spell_id": int(aura[1]),
-            }
-            for aura in cols[73:90]  # Adjust as necessary
-        ]
-        honor_level, season, rating, tier = map(int, cols[90:94])
+        start_pattern = r"\[\("
+        end_pattern = r"\)\]"
 
-        return {
+        start_index = -1
+        end_index = -1
+
+        # Encontre o índice do primeiro elemento que contém "[("
+        for i, col in enumerate(cols):
+            if re.search(start_pattern, col):
+                start_index = i
+                break
+
+        # Encontre o índice do próximo elemento que contém ")]" após o start_index
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(end_pattern, col):
+                end_index = i
+                break
+
+        # Agora você pode extrair os elementos entre start_index e end_index
+        class_talents = cols[start_index : end_index + 1]
+
+        info = {
             "timestamp": ts,
             "event": "COMBATANT_INFO",
-            "name": name,
-            "faction": faction,
-            "stats": stats,
-            "talents": talents,
-            "artifact_traits": artifact_traits,
-            "equipment": equipment,
-            "auras": auras,
-            "honor_level": honor_level,
-            "season": season,
-            "rating": rating,
-            "tier": tier,
+            "playerguid": cols[1],
+            "faction": int(cols[2]),
+            "character_stats": {
+                "strength": int(cols[3]),
+                "agility": int(cols[4]),
+                "stamina": int(cols[5]),
+                "intelligence": int(cols[6]),
+                "dodge": int(cols[7]),
+                "parry": int(cols[8]),
+                "block": int(cols[9]),
+                "critMelee": int(cols[10]),
+                "critRanged": int(cols[11]),
+                "critSpell": int(cols[12]),
+                "speed": int(cols[13]),
+                "lifesteal": int(cols[14]),
+                "hasteMelee": int(cols[15]),
+                "hasteRanged": int(cols[16]),
+                "hasteSpell": int(cols[17]),
+                "avoidance": int(cols[18]),
+                "mastery": int(cols[19]),
+                "versatilityDamageDone": int(cols[20]),
+                "versatilityHealingDone": int(cols[21]),
+                "versatilityDamageTaken": int(cols[22]),
+                "armor": int(cols[23]),
+                "CurrentSpecID": int(cols[24]),
+                "classtalents": class_talents,
+            },
         }
+
+        return info
+
+
+class CombatantInfoParser:
+    def __init__(self, parser):
+        self.parser = parser
+
+    def parse(self, ts, cols):
+        return self.parser.parse_combatant_info(ts, cols)
 
 
 if __name__ == "__main__":
