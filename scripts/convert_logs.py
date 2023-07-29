@@ -740,7 +740,7 @@ class SpellAbsorbedParser:
             "casterGUID": cols[0],
             "casterName": cols[1],
             "casterFlags": parse_unit_flag(cols[2]),
-            "casterFlags2": parse_unit_flag(cols[3]),
+            "casterRaidFlags": parse_unit_flag(cols[3]),
             "absorbSpellId": cols[4],
             "absorbSpellName": cols[5],
             "absorbSpellSchool": parse_school_flag(cols[6]),
@@ -933,26 +933,98 @@ class Parser:
                     yield self.parse_line(line)
 
     def parse_combatant_info(self, ts, cols):
-        start_pattern = r"\[\("
-        end_pattern = r"\)\]"
+        class_talents_start_pattern = r"\[\("
+        class_talents_end_pattern = r"\)\]"
+        pvp_talents_start_pattern = r"\("
+        pvp_talents_end_pattern = r"\)"
+        artifact_traits_start_pattern = r"\["
+        artifact_traits_end_pattern = r"\)\]\]"
+        equipped_items_start_pattern = r"\[\("
+        equipped_items_end_pattern = r"\)\)\]"
+        interesting_auras_start_pattern = r"\["
+        interesting_auras_end_pattern = r"\]"
 
         start_index = -1
         end_index = -1
 
         # Encontre o índice do primeiro elemento que contém "[("
         for i, col in enumerate(cols):
-            if re.search(start_pattern, col):
+            if re.search(class_talents_start_pattern, col):
                 start_index = i
                 break
 
         # Encontre o índice do próximo elemento que contém ")]" após o start_index
         for i, col in enumerate(cols[start_index:], start=start_index):
-            if re.search(end_pattern, col):
+            if re.search(class_talents_end_pattern, col):
                 end_index = i
                 break
 
         # Agora você pode extrair os elementos entre start_index e end_index
         class_talents = cols[start_index : end_index + 1]
+
+        # Agora vamos fazer a mesma coisa para pvp_talents
+        start_index = end_index + 1
+        # Comece a busca no elemento seguinte ao fim dos class talents
+
+        # Encontre o índice do primeiro elemento que contém o start pattern de pvp_talents
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(pvp_talents_start_pattern, col):
+                start_index = i
+                break
+
+        # Encontre o índice do próximo elemento que contém o end pattern de pvp_talents
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(pvp_talents_end_pattern, col):
+                end_index = i
+                break
+
+        # Agora você pode extrair os elementos entre start_index e end_index
+        pvp_talents = cols[start_index : end_index + 1]
+
+        # Artifact Traits
+        start_index = end_index + 1
+
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(artifact_traits_start_pattern, col):
+                start_index = i
+                break
+
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(artifact_traits_end_pattern, col):
+                end_index = i
+                break
+
+        artifact_traits = cols[start_index : end_index + 1]
+
+        # Equipped Items
+        start_index = end_index + 1
+
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(equipped_items_start_pattern, col):
+                start_index = i
+                break
+
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(equipped_items_end_pattern, col):
+                end_index = i
+                break
+
+        equipped_items = cols[start_index : end_index + 1]
+
+        # Interesting Auras
+        start_index = end_index + 1
+
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(interesting_auras_start_pattern, col):
+                start_index = i
+                break
+
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(interesting_auras_end_pattern, col):
+                end_index = i
+                break
+
+        interesting_auras = cols[start_index : end_index + 1]
 
         info = {
             "timestamp": ts,
@@ -982,7 +1054,12 @@ class Parser:
                 "versatilityDamageTaken": int(cols[22]),
                 "armor": int(cols[23]),
                 "CurrentSpecID": int(cols[24]),
-                "classtalents": class_talents,
+                "classTalents": class_talents,
+                "pvpTalents": pvp_talents,
+                "artifactTraits": artifact_traits,
+                "equippedItems": equipped_items,
+                "interestingAuras": interesting_auras,
+                "pvpStats": cols[-4:],
             },
         }
 
