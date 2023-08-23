@@ -946,20 +946,17 @@ class Parser:
 
         return cols[start_index : end_index + 1], end_index + 1
 
+    def extract_pattern(self, cols, start_pattern, end_pattern, start_index):
+        return self.extract_pattern_data(cols, start_pattern, end_pattern, start_index)
+
     def parse_combatant_info(self, ts, cols):
         patterns = {
-            "class_talents": (r"\[\(", r"\)\]"),
-            "pvp_talents": (r"\(", r"\)"),
-            "artifact_traits": (r"\[", r"\)\]\]"),
-            "equipped_items": (r"\[\(", r"\)\)\]"),
-            "interesting_auras": (r"\[", r"\]"),
+            "classTalents": (r"\[\(", r"\)\]"),
+            "pvpTalents": (r"\(", r"\)"),
+            "artifactTraits": (r"\[", r"\)\]\]"),
+            "equippedItems": (r"\[\(", r"\)\)\]"),
+            "interestingAuras": (r"\[", r"\]"),
         }
-        start_index = 0
-        for key, (start_pattern, end_pattern) in patterns.items():
-            cols_extracted, start_index = self.extract_pattern_data(
-                cols, start_pattern, end_pattern, start_index
-            )
-            patterns[key] = cols_extracted
 
         info = {
             "timestamp": ts,
@@ -989,15 +986,17 @@ class Parser:
                 "versatilityDamageTaken": int(cols[22]),
                 "armor": int(cols[23]),
                 "CurrentSpecID": int(cols[24]),
-                "classTalents": patterns["class_talents"],
-                "pvpTalents": patterns["pvp_talents"],
-                "artifactTraits": patterns["artifact_traits"],
-                "equippedItems": patterns["equipped_items"],
-                "interestingAuras": patterns["interesting_auras"],
-                "pvpStats": cols[-4:],
             },
         }
 
+        start_index = 25
+        for key, (start_pattern, end_pattern) in patterns.items():
+            extracted_data, start_index = self.extract_pattern(
+                cols, start_pattern, end_pattern, start_index
+            )
+            info["character_stats"][key] = extracted_data
+
+        info["character_stats"]["pvpStats"] = cols[start_index:]
         return info
 
 
