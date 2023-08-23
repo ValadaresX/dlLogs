@@ -1012,7 +1012,7 @@ class CombatantInfoParser:
 if __name__ == "__main__":
     p = Parser()
     dirname = os.path.dirname(__file__)
-    input_filename = os.path.join(dirname, "test.txt")
+    input_filename = os.path.join(dirname, "dados_brutos_teste.txt")
     output_filename = os.path.join(dirname, "output.json")
 
     results = []
