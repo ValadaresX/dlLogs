@@ -946,9 +946,6 @@ class Parser:
 
         return cols[start_index : end_index + 1], end_index + 1
 
-    def extract_pattern(self, cols, start_pattern, end_pattern, start_index):
-        return self.extract_pattern_data(cols, start_pattern, end_pattern, start_index)
-
     def parse_combatant_info(self, ts, cols):
         patterns = {
             "classTalents": (r"\[\(", r"\)\]"),
@@ -991,7 +988,7 @@ class Parser:
 
         start_index = 25
         for key, (start_pattern, end_pattern) in patterns.items():
-            extracted_data, start_index = self.extract_pattern(
+            extracted_data, start_index = self.extract_pattern_data(
                 cols, start_pattern, end_pattern, start_index
             )
             info["character_stats"][key] = extracted_data
