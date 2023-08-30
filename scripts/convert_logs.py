@@ -946,7 +946,24 @@ class Parser:
 
         return cols[start_index : end_index + 1], end_index + 1
 
+    def process_class_talents(self, data_list):
+        result = []
+        for data in data_list:
+            # Remove parênteses e divide pelo '@'
+            parts = data.strip("[]()").split("@")
+            talent = {
+                "talentId": int(parts[0]),
+                "spellId": int(parts[1]),
+                "rank": int(parts[2]),
+            }
+            result.append(talent)
+        return result
+
     def parse_combatant_info(self, ts, cols):
+        print("*" * 80)
+        print(cols)
+        print("*" * 80)
+
         patterns = {
             "classTalents": (r"\[\(", r"\)\]"),
             "pvpTalents": (r"\(", r"\)"),
@@ -991,9 +1008,17 @@ class Parser:
             extracted_data, start_index = self.extract_pattern_data(
                 cols, start_pattern, end_pattern, start_index
             )
-            info["character_stats"][key] = extracted_data
 
-        info["character_stats"]["pvpStats"] = cols[start_index:]
+            # Se o "key" for "classTalents", processamos os dados com process_class_talents
+            if key == "classTalents":
+                info[key] = self.process_class_talents(extracted_data)
+            else:
+                # Aqui, você adicionaria outras chamadas de funções de processamento conforme necessário
+                # Por enquanto, estamos apenas adicionando os dados brutos
+                info[key] = extracted_data
+
+        # Dado que "pvpStats" não parece estar incluído nos patterns, você pode continuar tratando-o separadamente
+        info["pvpStats"] = cols[start_index:]
         return info
 
 
