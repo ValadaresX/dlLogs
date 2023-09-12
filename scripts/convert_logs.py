@@ -946,7 +946,11 @@ class Parser:
 
         return cols[start_index : end_index + 1], end_index + 1
 
-    def process_class_talents(self, data_list):
+    def process_class_talents(self, cols):
+        data_list = self.get_pattern_data(cols, "classTalents")
+        if not data_list:
+            return []
+
         result = []
         for data in data_list:
             # Remove parênteses e divide pelo '@'
@@ -959,11 +963,7 @@ class Parser:
             result.append(talent)
         return result
 
-    def parse_combatant_info(self, ts, cols):
-        print("*" * 80)
-        print(cols)
-        print("*" * 80)
-
+    def get_pattern_data(self, cols, pattern_key):
         patterns = {
             "classTalents": (r"\[\(", r"\)\]"),
             "pvpTalents": (r"\(", r"\)"),
@@ -971,6 +971,145 @@ class Parser:
             "equippedItems": (r"\[\(", r"\)\)\]"),
             "interestingAuras": (r"\[", r"\]"),
         }
+
+        if pattern_key not in patterns:
+            raise ValueError(f"Pattern key {pattern_key} not found.")
+
+        start_pattern, end_pattern = patterns[pattern_key]
+
+        start_index = 0
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(start_pattern, col):
+                start_index = i
+                break
+
+        for i, col in enumerate(cols[start_index:], start=start_index):
+            if re.search(end_pattern, col):
+                end_index = i
+                break
+
+        return cols[start_index : end_index + 1]
+
+    def get_spec_info(self, spec_id):
+        data = [
+            {
+                "Class": "Death Knight",
+                "Specs": {250: "Blood", 251: "Frost", 252: "Unholy", 1455: "Initial"},
+            },
+            {
+                "Class": "Demon Hunter",
+                "Specs": {577: "Havoc", 581: "Vengeance", 1456: "Initial"},
+            },
+            {
+                "Class": "Druid",
+                "Specs": {
+                    102: "Balance",
+                    103: "Feral",
+                    104: "Guardian",
+                    105: "Restoration",
+                    1447: "Initial",
+                },
+            },
+            {
+                "Class": "Evoker",
+                "Specs": {
+                    1467: "Devastation",
+                    1468: "Preservation",
+                    1473: "Augmentation",
+                    1465: "Initial",
+                },
+            },
+            {
+                "Class": "Hunter",
+                "Specs": {
+                    253: "Beast Mastery",
+                    254: "Marksmanship",
+                    255: "Survival",
+                    1448: "Initial",
+                },
+            },
+            {
+                "Class": "Mage",
+                "Specs": {62: "Arcane", 63: "Fire", 64: "Frost", 1449: "Initial"},
+            },
+            {
+                "Class": "Monk",
+                "Specs": {
+                    268: "Brewmaster",
+                    270: "Mistweaver",
+                    269: "Windwalker",
+                    1450: "Initial",
+                },
+            },
+            {
+                "Class": "Paladin",
+                "Specs": {
+                    65: "Holy",
+                    66: "Protection",
+                    70: "Retribution",
+                    1451: "Initial",
+                },
+            },
+            {
+                "Class": "Priest",
+                "Specs": {
+                    256: "Discipline",
+                    257: "Holy",
+                    258: "Shadow",
+                    1452: "Initial",
+                },
+            },
+            {
+                "Class": "Rogue",
+                "Specs": {
+                    259: "Assassination",
+                    260: "Outlaw",
+                    261: "Subtlety",
+                    1453: "Initial",
+                },
+            },
+            {
+                "Class": "Shaman",
+                "Specs": {
+                    262: "Elemental",
+                    263: "Enhancement",
+                    264: "Restoration",
+                    1444: "Initial",
+                },
+            },
+            {
+                "Class": "Warlock",
+                "Specs": {
+                    265: "Affliction",
+                    266: "Demonology",
+                    267: "Destruction",
+                    1454: "Initial",
+                },
+            },
+            {
+                "Class": "Warrior",
+                "Specs": {71: "Arms", 72: "Fury", 73: "Protection", 1446: "Initial"},
+            },
+        ]
+
+        for class_data in data:
+            if spec_id in class_data["Specs"]:
+                return {
+                    "id": spec_id,
+                    "class": class_data["Class"],
+                    "spec": class_data["Specs"][spec_id],
+                }
+
+        # Caso o spec_id não seja encontrado, podemos retornar um dicionário com uma mensagem de erro
+        return {"id": spec_id, "class": "Unknown", "spec": "Unknown"}
+
+    def process_pvp_talents(self, cols):
+        pass
+
+    def parse_combatant_info(self, ts, cols):
+        print("*" * 80)
+        print(cols)
+        print("*" * 80)
 
         info = {
             "timestamp": ts,
@@ -999,26 +1138,17 @@ class Parser:
                 "versatilityHealingDone": int(cols[21]),
                 "versatilityDamageTaken": int(cols[22]),
                 "armor": int(cols[23]),
-                "CurrentSpecID": int(cols[24]),
+                "CurrentSpecID": self.get_spec_info(int(cols[24])),
             },
+            "classTalents": self.process_class_talents(cols),
+            "pvpTalents": self.process_pvp_talents(cols),
+            # "artifactTraits": self.process_artifact_traits(cols),
+            # "equippedItems": self.process_equipped_items(cols),
+            # "interestingAuras": self.process_interesting_auras(cols),
+            # Agora, você pode adicionar chamadas semelhantes para as outras funções de processamento aqui,
+            # passando 'cols' como argumento e usando get_pattern_data dentro dessas funções para extrair os dados necessários.
         }
 
-        start_index = 25
-        for key, (start_pattern, end_pattern) in patterns.items():
-            extracted_data, start_index = self.extract_pattern_data(
-                cols, start_pattern, end_pattern, start_index
-            )
-
-            # Se o "key" for "classTalents", processamos os dados com process_class_talents
-            if key == "classTalents":
-                info[key] = self.process_class_talents(extracted_data)
-            else:
-                # Aqui, você adicionaria outras chamadas de funções de processamento conforme necessário
-                # Por enquanto, estamos apenas adicionando os dados brutos
-                info[key] = extracted_data
-
-        # Dado que "pvpStats" não parece estar incluído nos patterns, você pode continuar tratando-o separadamente
-        info["pvpStats"] = cols[start_index:]
         return info
 
 
