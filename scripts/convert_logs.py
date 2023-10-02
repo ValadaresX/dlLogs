@@ -819,7 +819,8 @@ class Parser:
         if "Rated Solo Shuffle" in line:
             line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
         # Substituir ',' por '@' dentro dos parênteses
-        line = re.sub(r"\(([^)]*)\)", lambda m: m.group().replace(",", "@"), line)
+        # line = re.sub(r"\(([^)]*)\)", lambda m: m.group().replace(",", "@"), line)
+        line = re.sub(r"\(([\d,@]+)\)", lambda m: m.group().replace(",", "@"), line)
 
         terms = line.split(" ")
 
@@ -994,11 +995,20 @@ class Parser:
         data = [
             {
                 "Class": "Death Knight",
-                "Specs": {250: "Blood", 251: "Frost", 252: "Unholy", 1455: "Initial"},
+                "Specs": {
+                    250: "Blood",
+                    251: "Frost",
+                    252: "Unholy",
+                    1455: "Initial",
+                },
             },
             {
                 "Class": "Demon Hunter",
-                "Specs": {577: "Havoc", 581: "Vengeance", 1456: "Initial"},
+                "Specs": {
+                    577: "Havoc",
+                    581: "Vengeance",
+                    1456: "Initial",
+                },
             },
             {
                 "Class": "Druid",
@@ -1030,7 +1040,12 @@ class Parser:
             },
             {
                 "Class": "Mage",
-                "Specs": {62: "Arcane", 63: "Fire", 64: "Frost", 1449: "Initial"},
+                "Specs": {
+                    62: "Arcane",
+                    63: "Fire",
+                    64: "Frost",
+                    1449: "Initial",
+                },
             },
             {
                 "Class": "Monk",
@@ -1088,27 +1103,88 @@ class Parser:
             },
             {
                 "Class": "Warrior",
-                "Specs": {71: "Arms", 72: "Fury", 73: "Protection", 1446: "Initial"},
+                "Specs": {
+                    71: "Arms",
+                    72: "Fury",
+                    73: "Protection",
+                    1446: "Initial",
+                },
             },
         ]
 
-        for class_data in data:
-            if spec_id in class_data["Specs"]:
+        for player_class_data in data:
+            if spec_id in player_class_data["Specs"]:
                 return {
                     "id": spec_id,
-                    "class": class_data["Class"],
-                    "spec": class_data["Specs"][spec_id],
+                    "class": player_class_data["Class"],
+                    "spec": player_class_data["Specs"][spec_id],
                 }
 
         # Caso o spec_id não seja encontrado, podemos retornar um dicionário com uma mensagem de erro
         return {"id": spec_id, "class": "Unknown", "spec": "Unknown"}
 
-    def process_pvp_talents(self, cols):
-        pass
+    def get_pvp_talents(self, cols):
+        pattern_pvp_talents = re.compile(r"\(0@(\d+)@(\d+)@(\d+)\)")
+
+        # Searching for the pattern in the cols
+        matched = pattern_pvp_talents.search(str(cols))
+
+        # Extracting pvp talents if found
+        pvp_talents = matched.groups() if matched else None
+
+        return pvp_talents
+
+    def get_equipped_items(self, cols):
+        # Função interna para analisar uma string de item
+        def parse_item_string(item_str):
+            match = re.match(r"\((\d+)@(\d+)@\((.*?)\)@\((.*?)\)@\((.*?)\)\)", item_str)
+            if not match:
+                print(f"Formato não está de acordo: {item_str}")
+                return None  # ou talvez levantar uma exceção
+
+            item_id, ilvl, enchants, bonuses, gems = match.groups()
+            return {
+                "id": int(item_id),
+                "ilvl": int(ilvl),
+                "enchants": list(map(int, enchants.split("@"))) if enchants else [],
+                "bonuses": list(map(int, bonuses.split("@"))) if bonuses else [],
+                "gems": list(map(int, gems.split("@"))) if gems else [],
+            }
+
+        # Concatenate all columns into a single string
+        data_str = " ".join(cols)
+
+        # Find the grouping that contains the equipped items
+        start = [match.start() for match in re.finditer(r"\[\(", data_str)][3]
+        end = [match.end() for match in re.finditer(r"\)\]", data_str)][3]
+        equipped_items_str = data_str[start:end]
+        equipped_items_str = equipped_items_str.replace(" ", "@")
+
+        # Identify the equipment based on the parentheses count
+        open_parentheses = [
+            match.start() for match in re.finditer(r"\(", equipped_items_str)
+        ]
+        close_parentheses = [
+            match.end() for match in re.finditer(r"\)", equipped_items_str)
+        ]
+
+        boundaries = list(zip(open_parentheses[::4], close_parentheses[3::4]))
+
+        if len(boundaries) != 18:
+            raise ValueError(f"Expected 18 items, but found {len(boundaries)} items")
+
+        items = [equipped_items_str[start:end] for start, end in boundaries]
+
+        # Processa os itens equipados
+        equipped_items_dicts = [parse_item_string(item) for item in items]
+
+        return equipped_items_dicts
 
     def parse_combatant_info(self, ts, cols):
+        # Esses prints foram adicionados para visualizar o formato dos dados
         print("*" * 80)
         print(cols)
+        print(type(cols))
         print("*" * 80)
 
         info = {
@@ -1138,12 +1214,12 @@ class Parser:
                 "versatilityHealingDone": int(cols[21]),
                 "versatilityDamageTaken": int(cols[22]),
                 "armor": int(cols[23]),
-                "CurrentSpecID": self.get_spec_info(int(cols[24])),
             },
+            "CurrentSpecID": self.get_spec_info(int(cols[24])),
             "classTalents": self.process_class_talents(cols),
-            "pvpTalents": self.process_pvp_talents(cols),
+            "pvpTalents": self.get_pvp_talents(cols),
+            "equippedItems": self.get_equipped_items(cols),
             # "artifactTraits": self.process_artifact_traits(cols),
-            # "equippedItems": self.process_equipped_items(cols),
             # "interestingAuras": self.process_interesting_auras(cols),
             # Agora, você pode adicionar chamadas semelhantes para as outras funções de processamento aqui,
             # passando 'cols' como argumento e usando get_pattern_data dentro dessas funções para extrair os dados necessários.
