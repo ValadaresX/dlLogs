@@ -1232,6 +1232,79 @@ class Parser:
 
         return pvp_stats
 
+    def get_artifact_traits(self, cols):
+        # Localizando os índices dos colchetes que delimitam o campo "Artifact Traits"
+        open_brackets_indices = [
+            i for i, elem in enumerate(cols) if elem.startswith("[")
+        ]
+        close_brackets_indices = [
+            i for i, elem in enumerate(cols) if elem.endswith("]")
+        ]
+
+        # Verificando se encontramos os colchetes corretos
+        if len(open_brackets_indices) < 2 or len(close_brackets_indices) < 4:
+            raise ValueError(
+                "Não foi possível encontrar o agrupamento de 'Artifact Traits'."
+            )
+
+        # Obtendo os índices do início e do fim do campo "Artifact Traits"
+        start_index = open_brackets_indices[1]
+        end_index = close_brackets_indices[3]
+
+        # Extraindo a substring que contém as informações sobre "Artifact Traits"
+        artifact_traits_str = ",".join(cols[start_index : end_index + 1])
+        match = re.match(
+            r"\[(\d+),(\d+),\[(.*?)\],\[(.*?)\],\[(.*?)\]\]", artifact_traits_str
+        )
+
+        # Verifica se a expressão regular casou com a string
+        if not match:
+            raise ValueError("Formato inválido")
+
+        # Extrai os grupos casados
+        (
+            artifact_trait_id_1,
+            trait_effective_level_1,
+            artifact_trait_id_2_str,
+            artifact_trait_id_3_str,
+            artifact_trait_id_4_str,
+        ) = match.groups()
+
+        # Processa cada componente
+        artifact_trait_id_1 = int(artifact_trait_id_1)
+        trait_effective_level_1 = int(trait_effective_level_1)
+
+        artifact_trait_id_2 = (
+            [int(i) for i in artifact_trait_id_2_str.split(",") if i]
+            if artifact_trait_id_2_str
+            else []
+        )
+        artifact_trait_id_3 = (
+            [int(i[1:-1]) for i in artifact_trait_id_3_str.split(",") if i]
+            if artifact_trait_id_3_str
+            else []
+        )
+        artifact_trait_id_4 = (
+            [
+                tuple(map(int, i[1:-1].split("@")))
+                for i in artifact_trait_id_4_str.split(",")
+                if i
+            ]
+            if artifact_trait_id_4_str
+            else []
+        )
+
+        # Constrói o dicionário
+        artifact_traits_dict = {
+            "ID_1": artifact_trait_id_1,
+            "Level_1": trait_effective_level_1,
+            "ID_2": artifact_trait_id_2,
+            "ID_3": artifact_trait_id_3,
+            "ID_4": artifact_trait_id_4,
+        }
+
+        return artifact_traits_dict
+
     def parse_combatant_info(self, ts, cols):
         # Esses prints foram adicionados para visualizar o formato dos dados
         print("*" * 80)
@@ -1270,10 +1343,10 @@ class Parser:
             "currentSpecID": self.get_spec_info(int(cols[24])),
             "classTalents": self.process_class_talents(cols),
             "pvpTalents": self.get_pvp_talents(cols),
+            "artifactTraits": self.get_artifact_traits(cols),
             "equippedItems": self.get_equipped_items(cols),
             "interestingAuras": self.get_interesting_auras(cols),
             "pvpStats": self.get_pvp_stats(cols),
-            # "artifactTraits": self.process_artifact_traits(cols),
         }
 
         return info
