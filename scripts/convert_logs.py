@@ -1180,6 +1180,38 @@ class Parser:
 
         return equipped_items_dicts
 
+    def get_interesting_auras(self, cols):
+        data_str = " ".join(cols)
+        last_open_bracket = data_str.rfind("[")
+        last_close_bracket = data_str.rfind("]")
+
+        # Extrai a substring entre os últimos colchetes
+        interesting_auras_str = data_str[last_open_bracket + 1 : last_close_bracket]
+        print(interesting_auras_str)
+
+        # Verifica se a string extraída é vazia
+        if not interesting_auras_str:
+            return []
+
+        # Divide a substring em elementos separados por espaço
+        aura_elements = interesting_auras_str.split()
+
+        # Verifica se o número de elementos é par
+        if len(aura_elements) % 2 != 0:
+            print(aura_elements)
+            raise ValueError("Número ímpar de elementos em 'interesting auras'")
+
+        # Agrupa os elementos em pares e os armazena em uma lista de dicionários
+        aura_list = [
+            {
+                "Caster_GUID": aura_elements[i],
+                "Aura_Spell_ID": int(aura_elements[i + 1]),
+            }
+            for i in range(0, len(aura_elements), 2)
+        ]
+
+        return aura_list
+
     def parse_combatant_info(self, ts, cols):
         # Esses prints foram adicionados para visualizar o formato dos dados
         print("*" * 80)
@@ -1219,10 +1251,8 @@ class Parser:
             "classTalents": self.process_class_talents(cols),
             "pvpTalents": self.get_pvp_talents(cols),
             "equippedItems": self.get_equipped_items(cols),
+            "interestingAuras": self.get_interesting_auras(cols),
             # "artifactTraits": self.process_artifact_traits(cols),
-            # "interestingAuras": self.process_interesting_auras(cols),
-            # Agora, você pode adicionar chamadas semelhantes para as outras funções de processamento aqui,
-            # passando 'cols' como argumento e usando get_pattern_data dentro dessas funções para extrair os dados necessários.
         }
 
         return info
