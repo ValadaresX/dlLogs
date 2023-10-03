@@ -1212,6 +1212,26 @@ class Parser:
 
         return aura_list
 
+    def get_pvp_stats(self, cols):
+        # Os últimos quatro elementos em 'cols' são 'PvP Stats'
+        honor_level, season, rating, tier = cols[-4:]
+
+        # Converte os valores para inteiros, pois parecem ser representados como inteiros
+        honor_level = int(honor_level)
+        season = int(season)
+        rating = int(rating)
+        tier = int(tier)
+
+        # Cria um dicionário para armazenar as estatísticas de PvP
+        pvp_stats = {
+            "HonorLevel": honor_level,
+            "Season": season,
+            "Rating": rating,
+            "Tier": tier,
+        }
+
+        return pvp_stats
+
     def parse_combatant_info(self, ts, cols):
         # Esses prints foram adicionados para visualizar o formato dos dados
         print("*" * 80)
@@ -1247,11 +1267,12 @@ class Parser:
                 "versatilityDamageTaken": int(cols[22]),
                 "armor": int(cols[23]),
             },
-            "CurrentSpecID": self.get_spec_info(int(cols[24])),
+            "currentSpecID": self.get_spec_info(int(cols[24])),
             "classTalents": self.process_class_talents(cols),
             "pvpTalents": self.get_pvp_talents(cols),
             "equippedItems": self.get_equipped_items(cols),
             "interestingAuras": self.get_interesting_auras(cols),
+            "pvpStats": self.get_pvp_stats(cols),
             # "artifactTraits": self.process_artifact_traits(cols),
         }
 
