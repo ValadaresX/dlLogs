@@ -1,14 +1,17 @@
 import os
+import random
 import re
+import sys
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
 import chardet
 import requests
+import schedule
 from tqdm import tqdm
-
-from .url import url_base
+from url import url_base
 
 #  Configuração do diretório
 logs_dir = Path.cwd() / "logs"
@@ -86,6 +89,7 @@ def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
         print(result)  # Output: {"https://example.com/00000123456789"
         , "https://example.com/00000123456789"}
     """
+
     new_keys = set()
     for key in found_keys:
         log_file_path = logs_dir / f"{key}.txt"
@@ -94,29 +98,9 @@ def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
     return new_keys
 
 
-def download_text_files(new_keys: set[str], logs_dir: Path) -> None:
-    """
-    Faz o download de arquivos de texto das URLs fornecidas em 'new_keys' e os
-    salva no diretório 'logs_dir'.
-
-    Args:
-        new_keys (list[str]): Lista de URLs dos arquivos a serem baixados.
-        logs_dir (str): Diretório onde os arquivos de log serão salvos.
-
-    Raises:
-        ValueError: Se 'new_keys' estiver vazio ou não contiver URLs válidas.
-
-    Example:
-        >>> new_keys = ["https://example.com/00000123456789"
-        , "https://example.com/00000123456789"]
-        >>> logs_dir = "/path/to/logs"
-        >>> download_text_files(new_keys, logs_dir)
-        Existem 2 registros para baixar.
-
-    """
-
+def download_text_files(new_keys: set[str], logs_dir: Path) -> bool:
     if not new_keys:
-        raise ValueError("Não há novos registros para download.")
+        return False  # Retorna False se new_keys for vazia
 
     print(f"Existem {len(new_keys)} registros para baixar.")
 
@@ -144,24 +128,57 @@ def download_text_files(new_keys: set[str], logs_dir: Path) -> None:
 
         log_text = log_bytes.decode(encoding)
 
-        filename = os.path.join(logs_dir, os.path.basename(url))
+        filename = os.path.join(logs_dir, os.path.basename(url) + ".txt")
         with open(filename, "w", encoding="utf-8") as f:
             f.write(log_text)
 
     print("Registros de log baixados com sucesso!!!")
+    return True  # Retorna True se new_keys não for vazia
 
-
-"""
 
 def main():
-    # Executar o script teste
     data = get_remote_xml_data()
     found_keys = filter_key_tag(data)
     new_keys = get_new_keys(found_keys, url_base, logs_dir)
-    download_text_files(new_keys, logs_dir)
+    return download_text_files(new_keys, logs_dir)  # Retorna True ou False
+
+
+def format_duration(seconds):
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours} horas, {minutes} minutos e {seconds} segundos"
+
+
+def schedule_job():
+    intervalo = random.uniform(8, 9)  # Gera um intervalo aleatório
+    print(f"\nPróxima execução em {intervalo:.2f} horas")
+    next_run_in = intervalo * 3600  # Convertendo horas em segundos
+    schedule.every(next_run_in).seconds.do(main)
+    return next_run_in
+
+
+def countdown(seconds):
+    for remaining in range(int(seconds), 0, -1):  # Convertendo seconds para int aqui
+        print(
+            f"\rTempo restante até a próxima execução: {format_duration(remaining)}",
+            end="",
+        )
+        time.sleep(1)
 
 
 if __name__ == "__main__":
-    main()
-
-"""
+    first_run = True
+    while True:
+        if (
+            first_run or not main()
+        ):  # Se for a primeira execução ou se main() retornar False, reagende imediatamente
+            print(
+                "\n\033[31mNão há novos registros para download. Reagendando...\033[0m"
+            )
+            first_run = False  # Atualiza o flag para que main() não seja chamado novamente no início
+        next_run_in = schedule_job()
+        countdown(next_run_in)
+        schedule.run_pending()
+        time.sleep(
+            1
+        )  # Adicionado um atraso para evitar execução excessivamente rápida do loop
