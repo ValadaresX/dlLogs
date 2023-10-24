@@ -137,7 +137,8 @@ def download_text_files(new_keys: set[str], logs_dir: Path) -> bool:
 
 
 def main():
-    print("\nIniciando a função main...")
+    print("\n\033[93mIniciando a função main...\033[0m")  # Amarelo
+
     data = get_remote_xml_data()
     found_keys = filter_key_tag(data)
     new_keys = get_new_keys(found_keys, url_base, logs_dir)
@@ -151,8 +152,8 @@ def format_duration(seconds):
 
 
 def schedule_job():
-    intervalo = random.uniform(0.002, 0.001)  # Gera um intervalo aleatório
-    print(f"Próxima execução em {intervalo:.2f} horas")
+    intervalo = random.uniform(8, 9)  # Gera um intervalo aleatório
+    print(f"\033[94mPróxima execução em {intervalo:.2f} horas\033[0m")  # Azul
     next_run_in = intervalo * 3600  # Convertendo horas em segundos
     return next_run_in
 
@@ -160,16 +161,19 @@ def schedule_job():
 def countdown(seconds):
     for remaining in range(int(seconds), 0, -1):  # Convertendo seconds para int aqui
         print(
-            f"\rTempo restante até a próxima execução: {format_duration(remaining)}",
+            f"\r\033[92mTempo restante até a próxima execução: {format_duration(remaining)}\033[0m",
             end="",
-        )
+        )  # Verde
+
         time.sleep(1)
 
 
 def run():
     result = main()  # Execute main() imediatamente
     if not result:  # Se main() retornar False, reagende imediatamente
-        print("\033[31mNão há novos registros para download. Reagendando...\033[0m")
+        print(
+            "\033[91mNão há novos registros para download. Reagendando...\033[0m"
+        )  # Vermelho
     next_run_in = schedule_job()
     countdown(next_run_in)
 
