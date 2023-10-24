@@ -1,9 +1,7 @@
 import os
 import random
 import re
-import sys
 import time
-from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -44,6 +42,8 @@ def get_remote_xml_data() -> str:
     """
     response = requests.get(url_base)
     encoding = chardet.detect(response.content)["encoding"]
+    if not encoding:
+        raise ValueError("Não foi possível determinar a codificação dos dados.")
     return response.content.decode(encoding)
 
 
@@ -137,6 +137,7 @@ def download_text_files(new_keys: set[str], logs_dir: Path) -> bool:
 
 
 def main():
+    print("\nIniciando a função main...")
     data = get_remote_xml_data()
     found_keys = filter_key_tag(data)
     new_keys = get_new_keys(found_keys, url_base, logs_dir)
@@ -150,10 +151,9 @@ def format_duration(seconds):
 
 
 def schedule_job():
-    intervalo = random.uniform(8, 9)  # Gera um intervalo aleatório
-    print(f"\nPróxima execução em {intervalo:.2f} horas")
+    intervalo = random.uniform(0.002, 0.001)  # Gera um intervalo aleatório
+    print(f"Próxima execução em {intervalo:.2f} horas")
     next_run_in = intervalo * 3600  # Convertendo horas em segundos
-    schedule.every(next_run_in).seconds.do(main)
     return next_run_in
 
 
@@ -166,19 +166,18 @@ def countdown(seconds):
         time.sleep(1)
 
 
+def run():
+    result = main()  # Execute main() imediatamente
+    if not result:  # Se main() retornar False, reagende imediatamente
+        print("\033[31mNão há novos registros para download. Reagendando...\033[0m")
+    next_run_in = schedule_job()
+    countdown(next_run_in)
+
+
 if __name__ == "__main__":
-    first_run = True
+    print("Executando main pela primeira vez...")
     while True:
-        if (
-            first_run or not main()
-        ):  # Se for a primeira execução ou se main() retornar False, reagende imediatamente
-            print(
-                "\n\033[31mNão há novos registros para download. Reagendando...\033[0m"
-            )
-            first_run = False  # Atualiza o flag para que main() não seja chamado novamente no início
-        next_run_in = schedule_job()
-        countdown(next_run_in)
-        schedule.run_pending()
+        run()  # Chame run() em cada iteração do loop
         time.sleep(
             1
         )  # Adicionado um atraso para evitar execução excessivamente rápida do loop
