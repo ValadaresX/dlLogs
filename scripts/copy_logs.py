@@ -7,12 +7,14 @@ from urllib.parse import urlparse
 
 import chardet
 import requests
-import schedule
 from tqdm import tqdm
 from url import url_base
 
 #  Configuração do diretório
 logs_dir = Path.cwd() / "logs"
+if not os.path.exists(str(logs_dir)):
+    os.makedirs(str(logs_dir))
+    print("Foi criado o diretório logs.")
 
 
 def get_status_code(response: requests.Response) -> int:
@@ -162,10 +164,11 @@ def countdown(seconds):
     for remaining in range(int(seconds), 0, -1):  # Convertendo seconds para int aqui
         print(
             f"\r\033[92mTempo restante até a próxima execução: {format_duration(remaining)}\033[0m",
-            end="",
+            end=" ",
         )  # Verde
-
         time.sleep(1)
+
+    print()
 
 
 def run():

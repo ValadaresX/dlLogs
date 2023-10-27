@@ -1,4 +1,5 @@
 import datetime
+import glob
 import json
 import os
 import re
@@ -934,7 +935,8 @@ class Parser:
                     yield self.parse_line(line)
 
     def extract_pattern_data(self, cols, start_pattern, end_pattern, start_index):
-        """Extrai dados baseado em padrões de início e fim a partir de uma lista de colunas."""
+        """Extrai dados baseado em padrões de início
+        e fim a partir de uma lista de colunas."""
         for i, col in enumerate(cols[start_index:], start=start_index):
             if re.search(start_pattern, col):
                 start_index = i
@@ -1216,7 +1218,7 @@ class Parser:
         # Os últimos quatro elementos em 'cols' são 'PvP Stats'
         honor_level, season, rating, tier = cols[-4:]
 
-        # Converte os valores para inteiros, pois parecem ser representados como inteiros
+        # Converte os valores para inteiros
         honor_level = int(honor_level)
         season = int(season)
         rating = int(rating)
@@ -1243,9 +1245,8 @@ class Parser:
 
         # Verificando se encontramos os colchetes corretos
         if len(open_brackets_indices) < 2 or len(close_brackets_indices) < 4:
-            raise ValueError(
-                "Não foi possível encontrar o agrupamento de 'Artifact Traits'."
-            )
+            print("Não foi possível encontrar o agrupamento de 'Artifact Traits'.")
+            return {}
 
         # Obtendo os índices do início e do fim do campo "Artifact Traits"
         start_index = open_brackets_indices[1]
@@ -1305,6 +1306,29 @@ class Parser:
 
         return artifact_traits_dict
 
+    def split_groups(self, cols):
+        cols = " ".join(cols)
+        cols = data_str.replace("@", ",")
+        open_bracket_count = 0
+        close_bracket_count = 0
+        group_start_indices = []
+
+        for i, char in enumerate(cols):
+            if char == "[":
+                if open_bracket_count == close_bracket_count:
+                    group_start_indices.append(i)
+                open_bracket_count += 1
+            elif char == "]":
+                close_bracket_count += 1
+
+        groups_info = []
+        for start, end in zip(group_start_indices, group_start_indices[1:] + [None]):
+            group = cols[start:end]
+            group = group.strip(",")
+            groups_info.append(group)
+
+        return groups_info
+
     def parse_combatant_info(self, ts, cols):
         # Esses prints foram adicionados para visualizar o formato dos dados
         print("*" * 80)
@@ -1363,7 +1387,7 @@ class CombatantInfoParser:
 if __name__ == "__main__":
     p = Parser()
     dirname = os.path.dirname(__file__)
-    input_filename = os.path.join(dirname, "dados_brutos_teste.txt")
+    input_filename = os.path.join(dirname, "dados_brutos_teste_v1.txt")
     output_filename = os.path.join(dirname, "output.json")
 
     results = []
