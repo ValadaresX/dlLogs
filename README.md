@@ -36,6 +36,7 @@ Before running the script, you need to configure the following variables:
 ## Usage
 
 To run the script, simply execute the Python file `copy_logs.py`. The logs will be downloaded to the directory specified in `logs_dir`.
+
 ![](https://github.com/ValadaresX/dlLogs/blob/main/gifs/copy_logs.gif)
 
 During execution, the script checks if all logs are present on the disk. If any logs are missing, they will be downloaded. Otherwise, a message indicating that all logs are present will be displayed.
