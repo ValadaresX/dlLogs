@@ -1,5 +1,4 @@
 import datetime
-import glob
 import json
 import os
 import re
@@ -934,66 +933,7 @@ class Parser:
                 if line.strip():
                     yield self.parse_line(line)
 
-    def extract_pattern_data(self, cols, start_pattern, end_pattern, start_index):
-        """Extrai dados baseado em padrões de início
-        e fim a partir de uma lista de colunas."""
-        for i, col in enumerate(cols[start_index:], start=start_index):
-            if re.search(start_pattern, col):
-                start_index = i
-                break
-
-        for i, col in enumerate(cols[start_index:], start=start_index):
-            if re.search(end_pattern, col):
-                end_index = i
-                break
-
-        return cols[start_index : end_index + 1], end_index + 1
-
-    def process_class_talents(self, cols):
-        data_list = self.get_pattern_data(cols, "classTalents")
-        if not data_list:
-            return []
-
-        result = []
-        for data in data_list:
-            # Remove parênteses e divide pelo '@'
-            parts = data.strip("[]()").split("@")
-            talent = {
-                "talentId": int(parts[0]),
-                "spellId": int(parts[1]),
-                "rank": int(parts[2]),
-            }
-            result.append(talent)
-        return result
-
-    def get_pattern_data(self, cols, pattern_key):
-        patterns = {
-            "classTalents": (r"\[\(", r"\)\]"),
-            "pvpTalents": (r"\(", r"\)"),
-            "artifactTraits": (r"\[", r"\)\]\]"),
-            "equippedItems": (r"\[\(", r"\)\)\]"),
-            "interestingAuras": (r"\[", r"\]"),
-        }
-
-        if pattern_key not in patterns:
-            raise ValueError(f"Pattern key {pattern_key} not found.")
-
-        start_pattern, end_pattern = patterns[pattern_key]
-
-        start_index = 0
-        for i, col in enumerate(cols[start_index:], start=start_index):
-            if re.search(start_pattern, col):
-                start_index = i
-                break
-
-        for i, col in enumerate(cols[start_index:], start=start_index):
-            if re.search(end_pattern, col):
-                end_index = i
-                break
-
-        return cols[start_index : end_index + 1]
-
-    def get_spec_info(self, spec_id):
+    def extract_spec_info(self, spec_id):
         data = [
             {
                 "Class": "Death Knight",
@@ -1125,209 +1065,185 @@ class Parser:
         # Caso o spec_id não seja encontrado, podemos retornar um dicionário com uma mensagem de erro
         return {"id": spec_id, "class": "Unknown", "spec": "Unknown"}
 
-    def get_pvp_talents(self, cols):
-        pattern_pvp_talents = re.compile(r"\(0@(\d+)@(\d+)@(\d+)\)")
+    def process_cols(self, cols, group_type):
+        # Convertendo a lista em uma string única
+        combined_string = ",".join(cols).replace("@", ",")
 
-        # Searching for the pattern in the cols
-        matched = pattern_pvp_talents.search(str(cols))
+        # Função para identificar delimitadores
+        def find_delimiters(combined_string, delimiters):
+            groups = []
+            stack = []
+            start_index = -1
 
-        # Extracting pvp talents if found
-        pvp_talents = matched.groups() if matched else None
+            for i, char in enumerate(combined_string):
+                if char in delimiters["open"]:
+                    stack.append(char)
+                    if len(stack) == 1:
+                        start_index = i
+                elif char in delimiters["close"] and stack:
+                    stack.pop()
+                    if not stack:
+                        groups.append((start_index, i))
+            return groups
 
-        return pvp_talents
+        # Identificando e armazenando os agrupamentos
+        delimiters = {"open": ["[", "("], "close": ["]", ")"]}
+        groups = find_delimiters(combined_string, delimiters)
 
-    def get_equipped_items(self, cols):
-        # Função interna para analisar uma string de item
-        def parse_item_string(item_str):
-            match = re.match(r"\((\d+)@(\d+)@\((.*?)\)@\((.*?)\)@\((.*?)\)\)", item_str)
-            if not match:
-                print(f"Formato não está de acordo: {item_str}")
-                return None  # ou talvez levantar uma exceção
+        # Determinando a presença dos "Artifact Traits"
+        artifact_traits_present = len(groups) > 4
 
-            item_id, ilvl, enchants, bonuses, gems = match.groups()
-            return {
-                "id": int(item_id),
-                "ilvl": int(ilvl),
-                "enchants": list(map(int, enchants.split("@"))) if enchants else [],
-                "bonuses": list(map(int, bonuses.split("@"))) if bonuses else [],
-                "gems": list(map(int, gems.split("@"))) if gems else [],
-            }
-
-        # Concatenate all columns into a single string
-        data_str = " ".join(cols)
-
-        # Find the grouping that contains the equipped items
-        start = [match.start() for match in re.finditer(r"\[\(", data_str)][3]
-        end = [match.end() for match in re.finditer(r"\)\]", data_str)][3]
-        equipped_items_str = data_str[start:end]
-        equipped_items_str = equipped_items_str.replace(" ", "@")
-
-        # Identify the equipment based on the parentheses count
-        open_parentheses = [
-            match.start() for match in re.finditer(r"\(", equipped_items_str)
-        ]
-        close_parentheses = [
-            match.end() for match in re.finditer(r"\)", equipped_items_str)
-        ]
-
-        boundaries = list(zip(open_parentheses[::4], close_parentheses[3::4]))
-
-        if len(boundaries) != 18:
-            raise ValueError(f"Expected 18 items, but found {len(boundaries)} items")
-
-        items = [equipped_items_str[start:end] for start, end in boundaries]
-
-        # Processa os itens equipados
-        equipped_items_dicts = [parse_item_string(item) for item in items]
-
-        return equipped_items_dicts
-
-    def get_interesting_auras(self, cols):
-        data_str = " ".join(cols)
-        last_open_bracket = data_str.rfind("[")
-        last_close_bracket = data_str.rfind("]")
-
-        # Extrai a substring entre os últimos colchetes
-        interesting_auras_str = data_str[last_open_bracket + 1 : last_close_bracket]
-        print(interesting_auras_str)
-
-        # Verifica se a string extraída é vazia
-        if not interesting_auras_str:
-            return []
-
-        # Divide a substring em elementos separados por espaço
-        aura_elements = interesting_auras_str.split()
-
-        # Verifica se o número de elementos é par
-        if len(aura_elements) % 2 != 0:
-            print(aura_elements)
-            raise ValueError("Número ímpar de elementos em 'interesting auras'")
-
-        # Agrupa os elementos em pares e os armazena em uma lista de dicionários
-        aura_list = [
-            {
-                "Caster_GUID": aura_elements[i],
-                "Aura_Spell_ID": int(aura_elements[i + 1]),
-            }
-            for i in range(0, len(aura_elements), 2)
-        ]
-
-        return aura_list
-
-    def get_pvp_stats(self, cols):
-        # Os últimos quatro elementos em 'cols' são 'PvP Stats'
-        honor_level, season, rating, tier = cols[-4:]
-
-        # Converte os valores para inteiros
-        honor_level = int(honor_level)
-        season = int(season)
-        rating = int(rating)
-        tier = int(tier)
-
-        # Cria um dicionário para armazenar as estatísticas de PvP
-        pvp_stats = {
-            "HonorLevel": honor_level,
-            "Season": season,
-            "Rating": rating,
-            "Tier": tier,
+        # Mapeando os tipos de agrupamentos para seus índices na tupla
+        group_mapping = {
+            "class_talents": 0,
+            "pvp_talents": 1,
+            "artifact_traits": 2 if artifact_traits_present else None,
+            "equipped_items": 3 if artifact_traits_present else 2,
+            "interesting_auras": 4 if artifact_traits_present else 3,
         }
 
-        return pvp_stats
+        # Função para extrair um agrupamento específico
+        def extract_group(combined_string, group_indices, index):
+            if index is None or index >= len(group_indices):
+                return []
+            start, end = group_indices[index]
+            return combined_string[start + 1 : end].split(",")
 
-    def get_artifact_traits(self, cols):
-        # Localizando os índices dos colchetes que delimitam o campo "Artifact Traits"
-        open_brackets_indices = [
-            i for i, elem in enumerate(cols) if elem.startswith("[")
-        ]
-        close_brackets_indices = [
-            i for i, elem in enumerate(cols) if elem.endswith("]")
-        ]
+        # Tratando o caso especial de pvpStats
+        if group_type == "pvpStats":
+            return combined_string.split(",")[-4:]
 
-        # Verificando se encontramos os colchetes corretos
-        if len(open_brackets_indices) < 2 or len(close_brackets_indices) < 4:
-            print("Não foi possível encontrar o agrupamento de 'Artifact Traits'.")
-            return {}
-
-        # Obtendo os índices do início e do fim do campo "Artifact Traits"
-        start_index = open_brackets_indices[1]
-        end_index = close_brackets_indices[3]
-
-        # Extraindo a substring que contém as informações sobre "Artifact Traits"
-        artifact_traits_str = ",".join(cols[start_index : end_index + 1])
-        match = re.match(
-            r"\[(\d+),(\d+),\[(.*?)\],\[(.*?)\],\[(.*?)\]\]", artifact_traits_str
+        # Extraindo o agrupamento desejado
+        group_data = extract_group(
+            combined_string, groups, group_mapping.get(group_type)
         )
+        return group_data
 
-        # Verifica se a expressão regular casou com a string
-        if not match:
-            raise ValueError("Formato inválido")
+    def extract_class_talents(self, cols):
+        # Extrair os dados brutos dos talentos de classe
+        class_talents_raw = self.process_cols(cols, "class_talents")
 
-        # Extrai os grupos casados
-        (
-            artifact_trait_id_1,
-            trait_effective_level_1,
-            artifact_trait_id_2_str,
-            artifact_trait_id_3_str,
-            artifact_trait_id_4_str,
-        ) = match.groups()
+        # Lista para armazenar os dicionários de talentos processados
+        class_talents = []
 
-        # Processa cada componente
-        artifact_trait_id_1 = int(artifact_trait_id_1)
-        trait_effective_level_1 = int(trait_effective_level_1)
+        # Processar cada conjunto de três elementos na lista de dados brutos
+        for i in range(0, len(class_talents_raw), 3):
+            # Obter o grupo atual de três elementos
+            talent_group = class_talents_raw[i : i + 3]
 
-        artifact_trait_id_2 = (
-            [int(i) for i in artifact_trait_id_2_str.split(",") if i]
-            if artifact_trait_id_2_str
-            else []
-        )
-        artifact_trait_id_3 = (
-            [int(i[1:-1]) for i in artifact_trait_id_3_str.split(",") if i]
-            if artifact_trait_id_3_str
-            else []
-        )
-        artifact_trait_id_4 = (
-            [
-                tuple(map(int, i[1:-1].split("@")))
-                for i in artifact_trait_id_4_str.split(",")
-                if i
-            ]
-            if artifact_trait_id_4_str
-            else []
-        )
+            # Remover os caracteres '(' e ')' e converter para inteiros
+            talent_id, spell_id, rank = [int(part.strip("()")) for part in talent_group]
 
-        # Constrói o dicionário
-        artifact_traits_dict = {
-            "ID_1": artifact_trait_id_1,
-            "Level_1": trait_effective_level_1,
-            "ID_2": artifact_trait_id_2,
-            "ID_3": artifact_trait_id_3,
-            "ID_4": artifact_trait_id_4,
+            # Criar o dicionário para o talento atual
+            talent_info = {"talentId": talent_id, "spellId": spell_id, "rank": rank}
+
+            # Adicionar o dicionário à lista de talentos
+            class_talents.append(talent_info)
+
+        return class_talents
+
+    def extract_pvp_talents(self, cols):
+        # Extrair os dados brutos dos talentos PvP usando process_cols
+        pvp_talents_raw = self.process_cols(cols, "pvp_talents")
+
+        # Dicionário para armazenar as informações dos talentos PvP processados
+        pvp_talents_info = {}
+
+        # Processar cada talento na lista de dados brutos
+        for i, talent in enumerate(pvp_talents_raw):
+            # Remover os caracteres '(' e ')' e converter para inteiro
+            talent_id = int(talent.strip("()"))
+
+            # Adicionando o talento ao dicionário com a chave apropriada
+            talent_key = f"pvp_talent_{i + 1}"
+            pvp_talents_info[talent_key] = talent_id
+
+        return pvp_talents_info
+
+    def extract_equipped_items(self, cols):
+        equipped_items_raw = self.process_cols(cols, "equipped_items")
+        reconstructed_dicts = []
+        temp_item = ""
+        parenthesis_count = 0
+
+        for i, item_part in enumerate(equipped_items_raw):
+            temp_item += item_part
+
+            # Verificação modificada para inserção de vírgulas
+            if i < len(equipped_items_raw) - 1:
+                if not (
+                    item_part.endswith(")")
+                    and equipped_items_raw[i + 1].startswith("(")
+                ) or (item_part == "()" and equipped_items_raw[i + 1] == "()"):
+                    temp_item += ","
+
+            parenthesis_count += item_part.count("(")
+            parenthesis_count -= item_part.count(")")
+
+            if parenthesis_count == 0 and temp_item:
+                # Aplica o pós-processamento diretamente aqui
+                temp_item = temp_item.replace("()()", "(),()").replace(")(", "),(")
+
+                # Converte o item em um dicionário
+                parts = temp_item.strip("()").split(",")
+                item_dict = {
+                    "item_id": int(parts[0]),
+                    "item_level": int(parts[1]),
+                    "enchantments": [
+                        int(x) for x in parts[2].strip("()").split(",") if x
+                    ],
+                    "bonus_list": [
+                        int(x) for x in parts[3].strip("()").split(",") if x
+                    ],
+                    "gems": [int(x) for x in parts[4].strip("()").split(",") if x],
+                }
+                reconstructed_dicts.append(item_dict)
+                temp_item = ""
+
+        if parenthesis_count != 0:
+            raise ValueError("Unbalanced parentheses in input")
+
+        return reconstructed_dicts
+
+    def extract_interesting_auras(self, cols):
+        auras_raw = self.process_cols(cols, "interesting_auras")
+        auras_extracted = []
+
+        # Verifica se a lista está vazia ou contém elementos vazios
+        if not auras_raw or all(element == "" for element in auras_raw):
+            return auras_extracted
+
+        # Processamento de pares de GUIDs de jogador e IDs de feitiço
+        for i in range(0, len(auras_raw), 2):
+            player_guid = auras_raw[i]
+            spell_id = auras_raw[i + 1]
+
+            # Verifica se os elementos do par são válidos
+            if player_guid and spell_id.isdigit():
+                aura_dict = {"player_guid": player_guid, "spell_id": int(spell_id)}
+                auras_extracted.append(aura_dict)
+
+        return auras_extracted
+
+    def extract_pvp_stats(self, cols):
+        pvp_stats_raw = self.process_cols(cols, "pvpStats")
+
+        if len(pvp_stats_raw) != 4:
+            # Print o numero de itens encontrados
+            print(f"Numero de itens encontrados: {len(pvp_stats_raw)}")
+            # Print o conteúdo da lista
+            print(f"Conteudo da lista: {pvp_stats_raw}")
+
+        pvp_stats = [int(stat) for stat in pvp_stats_raw]
+
+        pvp_stats_dict = {
+            "honor_level": pvp_stats[0],
+            "season": pvp_stats[1],
+            "rating": pvp_stats[2],
+            "tier": pvp_stats[3],
         }
 
-        return artifact_traits_dict
-
-    def split_groups(self, cols):
-        cols = " ".join(cols)
-        cols = data_str.replace("@", ",")
-        open_bracket_count = 0
-        close_bracket_count = 0
-        group_start_indices = []
-
-        for i, char in enumerate(cols):
-            if char == "[":
-                if open_bracket_count == close_bracket_count:
-                    group_start_indices.append(i)
-                open_bracket_count += 1
-            elif char == "]":
-                close_bracket_count += 1
-
-        groups_info = []
-        for start, end in zip(group_start_indices, group_start_indices[1:] + [None]):
-            group = cols[start:end]
-            group = group.strip(",")
-            groups_info.append(group)
-
-        return groups_info
+        return pvp_stats_dict
 
     def parse_combatant_info(self, ts, cols):
         # Esses prints foram adicionados para visualizar o formato dos dados
@@ -1364,13 +1280,12 @@ class Parser:
                 "versatilityDamageTaken": int(cols[22]),
                 "armor": int(cols[23]),
             },
-            "currentSpecID": self.get_spec_info(int(cols[24])),
-            "classTalents": self.process_class_talents(cols),
-            "pvpTalents": self.get_pvp_talents(cols),
-            "artifactTraits": self.get_artifact_traits(cols),
-            "equippedItems": self.get_equipped_items(cols),
-            "interestingAuras": self.get_interesting_auras(cols),
-            "pvpStats": self.get_pvp_stats(cols),
+            "currentSpecID": self.extract_spec_info(int(cols[24])),
+            "classTalents": self.extract_class_talents(cols),
+            "pvpTalents": self.extract_pvp_talents(cols),
+            "equippedItems": self.extract_equipped_items(cols),
+            "interestingAuras": self.extract_interesting_auras(cols),
+            "pvpStats": self.extract_pvp_stats(cols),
         }
 
         return info
