@@ -9,7 +9,7 @@ New Logging Feature: COMBATANT_INFO | 2016-01-13 00:00 | ![Blizzard Entertainmen
 Whenever an ENCOUNTER_START event occurs, a new “COMBATANT_INFO” log line will also be printed for each player in the instance. The current data structure for COMBATANT_INFO is as follows, but is subject to change based on feedback and technical needs:
 
 ```lua
-COMBATANT_INFO, playerGUID, Strength, Agility, Stamina, Intelligence, Dodge, Parry, Block, CritMelee, CritRanged, CritSpell, Speed, Lifesteal, HasteMelee, HasteRanged, HasteSpell, Avoidance, Mastery, VersatilityDamageDone, VersatilityHealingDone, VersatilityDamageTaken, Armor, CurrentSpecID, (Class Talent 1, ...), (PvP Talent 1, ...), [Artifact Trait ID 1, Trait Effective Level 1, ...], [(Equipped Item ID 1, Equipped Item iLvL 1, (Permanent Enchant ID, Temp Enchant ID, On Use Spell Enchant ID), (Bonus List ID 1, ...), (Gem ID 1, Gem iLvL 1, ...))], ...,[Interesting Aura Caster GUID 1, Interesting Aura Spell ID 1, ...]
+COMBATANT_INFO, playerGUID, Strength, Agility, Stamina, Intelligence, Dodge, Parry, Block, CritMelee, CritRanged, CritSpell, Speed, Lifesteal, HasteMelee, HasteRanged, HasteSpell, Avoidance, Mastery, VersatilityDamageDone, VersatilityHealingDone, VersatilityDamageTaken, Armor, CurrentSpecID, [(Class Talent 1, ...)], (PvP Talent 1, ...), [Artifact Trait ID 1, Trait Effective Level 1, ...], [(Equipped Item ID 1, Equipped Item iLvL 1, (Permanent Enchant ID, Temp Enchant ID, On Use Spell Enchant ID), (Bonus List ID 1, ...), (Gem ID 1, Gem iLvL 1, ...))], ...,[Interesting Aura Caster GUID 1, Interesting Aura Spell ID 1, ...]
 ```
 
 Some clarifications about a few of those elements:
