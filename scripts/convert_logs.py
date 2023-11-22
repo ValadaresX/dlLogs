@@ -150,36 +150,10 @@ class EnvParser:
 
 
 class SwingParser:
-    """
-    Esta classe representa um SwingParser.
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        __init__(): Inicializa uma nova instância da classe SwingParser.
-        parse(cols): Analisa as colunas fornecidas e retorna uma tupla
-        contendo um dicionário vazio e as colunas.
-
-    Uso:
-        parser = SwingParser()
-        resultado = parser.parse(cols)
-    """
-
     def __init__(self):
         pass
 
     def parse(self, cols):
-        """
-        Analisa as colunas fornecidas e retorna uma tupla
-        contendo um dicionário vazio e as colunas.
-
-        Args:
-            cols (lista): As colunas a serem analisadas.
-
-        Retorna:
-            tuple: Uma tupla contendo um dicionário vazio e as colunas.
-        """
         return ({}, cols)
 
 
@@ -736,17 +710,32 @@ class SpellAbsorbedParser:
         pass
 
     def parse(self, cols):
-        return {
-            "casterGUID": cols[0],
-            "casterName": cols[1],
-            "casterFlags": parse_unit_flag(cols[2]),
-            "casterRaidFlags": parse_unit_flag(cols[3]),
-            "absorbSpellId": cols[4],
-            "absorbSpellName": cols[5],
-            "absorbSpellSchool": parse_school_flag(cols[6]),
-            "amount": int(cols[7]),
-            "critical": cols[8] != "nil",
-        }
+        if len(cols) >= 20:
+            print(80 * "#")
+            return {
+                "casterGUID": cols[0],
+                "casterName": cols[1],
+                "casterFlags": parse_unit_flag(cols[2]),
+                "casterRaidFlags": parse_unit_flag(cols[3]),
+                "absorbSpellId": cols[4],
+                "absorbSpellName": cols[5],
+                "absorbSpellSchool": parse_school_flag(cols[6]),
+                "amount": int(cols[7]),
+                "critical": cols[8] != "nil",
+            }
+        else:
+            print(80 * "*")
+            return {
+                "casterGUID": None,
+                "casterName": None,
+                "casterFlags": [],
+                "casterRaidFlags": [],
+                "spellId": cols[1],
+                "spellName": cols[2],
+                "spellSchool": parse_school_flag(cols[3]),
+                "amount": int(cols[4]),
+                "critical": cols[-1] != "nil",
+            }
 
 
 class Parser:
@@ -760,8 +749,11 @@ class Parser:
             "ENVIRONMENTAL": EnvParser(),
         }
         self.ev_suffix = {
+            "_DAMAGE_SUPPORT": DamageParser(),
+            "_HEAL_SUPPORT": HealParser(),
             "_DAMAGE": DamageParser(),
             "_DAMAGE_LANDED": DamageParser(),
+            "_DAMAGE_LANDED_SUPPORT": DamageParser(),
             "_MISSED": MissParser(),
             "_HEAL": HealParser(),
             "_ENERGIZE": EnergizeParser(),
@@ -789,6 +781,9 @@ class Parser:
             "_SUMMON": VoidSuffixParser(),
             "_RESURRECT": VoidSuffixParser(),
             "_ABSORBED": SpellAbsorbedParser(),
+            "_EMPOWER_START": VoidSuffixParser(),
+            "_EMPOWER_END": VoidSuffixParser(),
+            "_EMPOWER_INTERRUPT": VoidSuffixParser(),
         }
 
         self.combat_player_info = {
@@ -1302,7 +1297,7 @@ class CombatantInfoParser:
 if __name__ == "__main__":
     p = Parser()
     dirname = os.path.dirname(__file__)
-    input_filename = os.path.join(dirname, "dados_brutos_teste_v1.txt")
+    input_filename = os.path.join(dirname, "dados_brutos_teste_v3.txt")
     output_filename = os.path.join(dirname, "output.json")
 
     results = []
