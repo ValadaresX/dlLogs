@@ -164,6 +164,20 @@ Suffix Parser Set
 """
 
 
+class SupportParser:
+    def __init__(self):
+        pass
+
+    def parse(self, cols):
+        # Extrair o GUID do jogador de suporte e outros dados relevantes específicos de '_SUPPORT'
+        return {
+            "supportPlayerGUID": cols[
+                -1
+            ]  # Assumindo que o GUID do jogador de suporte é sempre o último elemento
+            # Outros campos conforme necessário
+        }
+
+
 class DamageParser:
     def __init__(self):
         pass
@@ -751,6 +765,7 @@ class Parser:
         self.ev_suffix = {
             "_DAMAGE_SUPPORT": DamageParser(),
             "_HEAL_SUPPORT": HealParser(),
+            "_ABSORBED_SUPPORT": SpellAbsorbedParser(),
             "_DAMAGE": DamageParser(),
             "_DAMAGE_LANDED": DamageParser(),
             "_DAMAGE_LANDED_SUPPORT": DamageParser(),
@@ -774,6 +789,7 @@ class Parser:
             "_CAST_START": VoidSuffixParser(),
             "_CAST_SUCCESS": VoidSuffixParser(),
             "_CAST_FAILED": CastFailedParser(),
+            # "_SUPPORT": SupportParser(),
             "_INSTAKILL": VoidSuffixParser(),
             "_DURABILITY_DAMAGE": VoidSuffixParser(),
             "_DURABILITY_DAMAGE_ALL": VoidSuffixParser(),
@@ -1297,7 +1313,7 @@ class CombatantInfoParser:
 if __name__ == "__main__":
     p = Parser()
     dirname = os.path.dirname(__file__)
-    input_filename = os.path.join(dirname, "dados_brutos_teste_v3.txt")
+    input_filename = os.path.join(dirname, "dados_brutos_teste_v2.txt")
     output_filename = os.path.join(dirname, "output.json")
 
     results = []
