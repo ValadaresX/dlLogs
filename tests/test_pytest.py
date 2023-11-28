@@ -12,10 +12,8 @@ from scripts.copy_logs import (
     get_new_keys,
     get_remote_xml_data,
     get_status_code,
-    url_base,
 )
-
-# from requests_mock import Mocker
+from scripts.url import url_base
 
 
 def test_status_code():

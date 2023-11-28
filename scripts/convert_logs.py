@@ -6,7 +6,6 @@ import shlex
 import time
 
 
-# Estou atualizando essa funcao com os dados do aquivo "wowpedia.md"
 def resolv_power_type(pt):
     """
     Mapeia os tipos de poder usados no jogo para seus respectivos nomes.
@@ -203,21 +202,6 @@ class MissParser:
         pass
 
     def parse(self, cols):
-        """
-        Analisa as colunas de uma linha com um evento de falha e retorna um
-        dicionário com os dados analisados.
-
-        Args:
-            cols (lista): Uma lista de colunas da linha de registro.
-
-        Retorna:
-            dict: Um dicionário com os dados analisados. As chaves e os valores
-            no dicionário são os seguintes:
-                - "missType" (str): O tipo de erro.
-                - "isOffHand" (str): (Opcional) Indica se a falha ocorreu
-                   com a arma de off-hand.
-                - "amountMissed" (int): (Opcional) A quantidade de dano perdido.
-        """
         obj = {"missType": cols[0]}
         if len(cols) > 1:
             obj["isOffHand"] = cols[1]
@@ -241,40 +225,10 @@ class HealParser:
 
 
 class EnergizeParser:
-    """Essa classe define um objeto EnergizeParser para analisar um tipo específico de
-    tipo específico de evento em dados de registro de combate.
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        __init__(self): Inicializa uma instância da classe EnergizeParser.
-        parse(self, cols): Analisa as colunas de dados fornecidas
-        e retorna um dicionário com as informações analisadas.
-
-    Example:
-        energize_parser = EnergizeParser()
-        cols = ["timestamp", "event", "source", "target", "amount", "powerType", ...]
-        parsed_data = energize_parser.parse(cols)
-        print(parsed_data)  # Output: {"amount": 100, "powerType": "Mana"}
-
-    """
-
     def __init__(self):
         pass
 
     def parse(self, cols):
-        """Analisa as colunas de dados fornecidas e retorna um dicionário
-        com as informações analisadas.
-
-        Args:
-            cols (lista): Uma lista de colunas que contém os dados a serem analisados.
-
-        Retorna:
-            dict: Um dicionário com as informações analisadas,
-            incluindo os valores "amount" e "powerType".
-
-        """
         cols = cols[8:]
         return {
             "amount": int(cols[0]),
@@ -287,35 +241,6 @@ class DrainParser:
         pass
 
     def parse(self, cols):
-        """
-        Analisa as colunas fornecidas e retorna um dicionário que
-        contém os dados analisados.
-
-        Args:
-            cols (lista): Uma lista de colunas a serem analisadas.
-
-        Retorna:
-            dict: Um dicionário que contém os dados analisados com as seguintes chaves:
-                - "amount": O valor analisado (convertido em um número inteiro).
-                - "powerType": O tipo de potência analisado (resolvido usando a função
-                  função `resolv_power_type`).
-                - "extraAmount": O valor extra analisado
-                  (convertido em um número inteiro).
-
-        Raises:
-            None
-
-        Example:
-            >>> parser = DrainParser()
-            >>> cols = ["10", "1", "5"]
-            >>> result = parser.parse(cols)
-            >>> print(result)
-            {
-                "amount": 10,
-                "powerType": "mana",
-                "extraAmount": 5
-            }
-        """
         if len(cols) != 3:
             print(cols)
         return {
@@ -326,47 +251,10 @@ class DrainParser:
 
 
 class LeechParser:
-    """
-    Classe responsável pela análise de eventos Leech a partir de dados de registro.
-
-    Métodos:
-        __init__(self): Inicializa o objeto LeechParser.
-
-        parse(self, cols): Analisa as colunas de um evento Leech e retorna um
-        dicionário com os dados analisados.
-
-    Example:
-        parser = LeechParser()
-        cols = ["100", "Mana", "50"]
-        result = parser.parse(cols)
-        print(result)  # Output: {"amount": 100, "powerType": "Mana", "extraAmount": 50}
-    """
-
     def __init__(self):
         pass
 
     def parse(self, cols):
-        """
-        Analisa as colunas de um evento Leech e retorna um dicionário
-        com os dados analisados.
-
-        Args:
-            cols (lista): Uma lista de colunas de um evento Leech.
-
-        Retorna:
-            dict: Um dicionário com os dados analisados, incluindo o valor,
-            powerType e extraAmount.
-
-        Raises:
-            None.
-
-        Example:
-            parser = LeechParser()
-            cols = ["100", "Mana", "50"]
-            result = parser.parse(cols)
-            print(result)  # Output: {"amount": 100, "powerType": "Mana",
-            "extraAmount": 50}
-        """
         if len(cols) != 3:
             print(cols)
         return {
@@ -377,45 +265,10 @@ class LeechParser:
 
 
 class SpellBlockParser:
-    """
-    Classe responsável pela análise dos eventos do tipo "SpellBlock" no registro.
-
-    Args:
-        Nenhum
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        __init__(): Inicializa o objeto SpellBlockParser.
-        parse(cols): Analisa as colunas de um evento SpellBlock e retorna um dicionário
-        dicionário com os dados analisados.
-
-    Exemplo:
-        parser = SpellBlockParser()
-        cols = ["123456", "Spell Name", "School of Magic"]
-        result = parser.parse(cols)
-        print(result) # Saída: {'extraSpellID': '123456', 'extraSpellName':
-        'Spell Name', 'extraSchool': 'School of Magic'}
-    """
-
     def __init__(self):
         pass
 
     def parse(self, cols):
-        """
-        Parses the columns of a SpellBlock event and returns a
-        dictionary with the parsed data.
-
-        Args:
-            cols (list): List of columns from a SpellBlock event.
-
-        Returns:
-            dict: Dictionary with the parsed data.
-
-        Raises:
-            None
-        """
         if len(cols) != 3 and len(cols) != 4:
             print(cols)
         obj = {
@@ -429,26 +282,6 @@ class SpellBlockParser:
 
 
 class ExtraAttackParser:
-    """
-    Classe responsável por analisar eventos de ataque extra.
-
-    Methods:
-        __init__(self): Inicializa a classe.
-        parse(self, cols): Analisa os dados do evento de ataque extra.
-
-    Args:
-        cols (list): Lista de colunas contendo os dados do evento.
-
-    Returns:
-        dict: Um dicionário contendo a quantidade de ataques extras.
-
-    Example:
-        >>> parser = ExtraAttackParser()
-        >>> cols = ["2"]
-        >>> result = parser.parse(cols)
-        >>> print(result)  # Output: {"amount": 2}
-    """
-
     def __init__(self):
         pass
 
@@ -483,27 +316,6 @@ class AuraParser:
 
 
 class AuraDoseParser:
-    """
-    Classe responsável por analisar eventos de aura.
-
-    Métodos:
-        __init__(self): Inicializa a classe.
-        parse(self, cols): Analisa os dados do evento de aura.
-
-    Args:
-        cols (list): Lista de colunas contendo os dados do evento.
-
-    Returns:
-        dict: Um dicionário contendo as informações do evento de aura.
-
-    Example:
-        >>> parser = AuraDoseParser()
-        >>> cols = ["Buff", "10", "Extra1", "Extra2"]
-        >>> result = parser.parse(cols)
-        >>> print(result)  # Output: {"auraType": "Buff", "amount": 10,
-        "auraExtra1": "Extra1", "auraExtra2": "Extra2"}
-    """
-
     def __init__(self):
         pass
 
@@ -518,32 +330,9 @@ class AuraDoseParser:
 
 class AuraBrokenParser:
     def __init__(self):
-        """
-        Classe responsável por analisar o sufixo 'AuraBroken' encontrado em eventos.
-
-        Args:
-            Nenhum.
-
-        Returns:
-            Nenhum.
-
-        """
+        pass
 
     def parse(self, cols):
-        """
-        Método responsável por analisar os dados do sufixo 'AuraBroken' em um evento.
-
-        Args:
-            cols (list): Lista contendo as colunas CSV do evento.
-
-        Returns:
-            dict: Dicionário contendo os dados analisados do evento, incluindo:
-                  - 'extraSpellID': O ID do feitiço extra que quebrou a aura.
-                  - 'extraSpellName': O nome do feitiço extra que quebrou a aura.
-                  - 'extraSchool': A escola do feitiço extra que quebrou a aura.
-                  - 'auraType': O tipo de aura que foi quebrada.
-
-        """
         if len(cols) != 4:
             print(cols)
         return {
@@ -559,24 +348,6 @@ class CastFailedParser:
         pass
 
     def parse(self, cols):
-        """
-        Analisa as colunas fornecidas e retorna um dicionário
-        com as informações analisadas.
-
-        Args:
-            cols (list): Uma lista de colunas que contém
-            os dados a serem analisados.
-
-        Retorna:
-            dict: Um dicionário com as informações analisadas,
-            incluindo o valor "failedType".
-
-        Example:
-            parser = CastFailedParser()
-            cols = ["Interrupted"]
-            result = parser.parse(cols)
-            print(result)  # Output: {"failedType": "Interrupted"}
-        """
         if len(cols) != 1:
             print(cols)
         return {
@@ -592,26 +363,6 @@ Special Event Parser Set
 
 
 class EnchantParser:
-    """Classe responsável por analisar eventos de encantamento.
-
-    Métodos:
-        __init__(self): Inicializa a classe.
-        parse(self, cols): Analisa os dados do evento de encantamento.
-
-    Args:
-        cols (list): Lista de colunas contendo os dados do evento.
-
-    Returns:
-        dict: Um dicionário contendo as informações do evento de encantamento.
-
-    Exemplo:
-        >>> parser = EnchantParser()
-        >>> cols = ["Encantamento", "123", "Nome do Item"]
-        >>> result = parser.parse(cols)
-        >>> print(result)  # Saída: {"spellName": "Encantamento", "itemID":
-        "123", "itemName": "Nome do Item"}
-    """
-
     def __init__(self):
         pass
 
@@ -631,22 +382,6 @@ class EncountParser:
         pass
 
     def parse(self, cols):
-        """
-        Método responsável por analisar os dados do evento EncountParser.
-
-        Args:
-            cols (list): Uma lista contendo os campos do evento.
-
-        Returns:
-            dict: Um dicionário contendo as informações analisadas do
-                evento, com as seguintes chaves:
-                - "encounterID": O ID do encontro.
-                - "encounterName": O nome do encontro.
-                - "difficultyID": O ID da dificuldade do encontro.
-                - "groupSize": O tamanho do grupo.
-                - "success" (opcional): Um valor booleano indicando se o
-                encontro foi bem-sucedido.
-        """
         obj = {
             "encounterID": cols[0],
             "encounterName": cols[1],
@@ -661,27 +396,6 @@ class EncountParser:
 
 
 class VoidParser:
-    """
-    Classe responsável por analisar uma linha com um evento de tipo "Void".
-
-    Atributos:
-        Nenhum
-
-    Métodos:
-        __init__(self):
-            Inicializa uma instância da classe VoidParser.
-
-        parse(self, cols):
-            Analisa as colunas fornecidas e retorna um dicionário vazio e as colunas.
-
-    Exemplo:
-        parser = VoidParser()
-        cols = ["timestamp", "event", "source", "target", "extra_data"]
-        result = parser.parse(cols)
-        print(result)  # Saída: ({}, ["timestamp", "event",
-        "source", "target", "extra_data"])
-    """
-
     def __init__(self):
         pass
 
@@ -829,8 +543,7 @@ class Parser:
         # Essa linha resolve o problema do matchType contendo espaços
         if "Rated Solo Shuffle" in line:
             line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
-        # Substituir ',' por '@' dentro dos parênteses
-        # line = re.sub(r"\(([^)]*)\)", lambda m: m.group().replace(",", "@"), line)
+
         line = re.sub(r"\(([\d,@]+)\)", lambda m: m.group().replace(",", "@"), line)
 
         terms = line.split(" ")
@@ -857,6 +570,7 @@ class Parser:
         splitter.whitespace_split = True
         cols = list(splitter)
         obj = self.parse_cols(ts, cols)
+
         print(obj)
 
         """
@@ -1313,7 +1027,7 @@ class CombatantInfoParser:
 if __name__ == "__main__":
     p = Parser()
     dirname = os.path.dirname(__file__)
-    input_filename = os.path.join(dirname, "dados_brutos_teste_v2.txt")
+    input_filename = os.path.join(dirname, "dados_brutos_teste_v1.txt")
     output_filename = os.path.join(dirname, "output.json")
 
     results = []

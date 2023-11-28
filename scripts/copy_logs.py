@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import chardet
 import requests
 from tqdm import tqdm
+
 from url import url_base
 
 #  Configuração do diretório
@@ -31,17 +32,6 @@ def get_status_code(response: requests.Response) -> int:
 
 
 def get_remote_xml_data() -> str:
-    """
-    Faz uma solicitação GET a url_base e retorna o conteúdo da resposta em
-    formato de string decodificada de acordo com a codificação detectada.
-
-    Essa função não recebe nenhum parâmetro e sempre retorna uma cadeia de
-    caracteres.
-
-    Returns:
-        str: O conteúdo da resposta em formato de string decodificada de
-        acordo com a codificação detectada.
-    """
     response = requests.get(url_base)
     encoding = chardet.detect(response.content)["encoding"]
     if not encoding:
@@ -70,28 +60,6 @@ def filter_key_tag(data_xml: str) -> set:
 
 
 def get_new_keys(found_keys: set[str], url_base: str, logs_dir: Path) -> set:
-    """
-    Retorna um conjunto contendo as chaves que estão presentes em
-    'found_keys', mas não existem como arquivos de log no diretório 'logs_dir'.
-
-    Args:
-        found_keys (set[str]): Conjunto de chaves encontradas.
-        url_base (str): URL base para construir as chaves ausentes.
-        logs_dir (Path): Diretório de logs onde procurar os arquivos.
-
-    Returns:
-        set[str]: Conjunto contendo as chaves ausentes que não têm
-        correspondentes nos arquivos de log.
-
-    Example:
-        found_keys = {"00000123456789", "00000123456789", "00000123456789"}
-        url_base = "https://example.com/"
-        logs_dir = Path("logs/")
-        result = get_new_keys(found_keys, url_base, logs_dir)
-        print(result)  # Output: {"https://example.com/00000123456789"
-        , "https://example.com/00000123456789"}
-    """
-
     new_keys = set()
     for key in found_keys:
         log_file_path = logs_dir / f"{key}.txt"
@@ -105,8 +73,15 @@ def download_text_files(new_keys: set[str], logs_dir: Path) -> bool:
         return False  # Retorna False se new_keys for vazia
 
     print(f"Existem {len(new_keys)} registros para baixar.")
-
     time.sleep(2)
+
+    total_size = 0
+    for url in new_keys:
+        response = requests.get(url, stream=True)
+        total_size += int(response.headers.get("content-length", 0))
+
+    pbar = tqdm(total=total_size, unit="iB", unit_scale=True)
+    files_downloaded = 0
 
     for url in new_keys:
         parsed_url = urlparse(url)
@@ -115,32 +90,27 @@ def download_text_files(new_keys: set[str], logs_dir: Path) -> bool:
 
         response = requests.get(url, stream=True)
 
-        total_size = int(response.headers.get("content-length", 0))
-
-        pbar = tqdm(total=total_size, unit="iB", unit_scale=True)
-
         log_bytes = b""
         for data in response.iter_content(chunk_size=1024):
             log_bytes += data
             pbar.update(len(data))
 
-        pbar.close()
-
         encoding = chardet.detect(log_bytes)["encoding"]
-
         log_text = log_bytes.decode(encoding)
 
         filename = os.path.join(logs_dir, os.path.basename(url) + ".txt")
         with open(filename, "w", encoding="utf-8") as f:
             f.write(log_text)
 
+        files_downloaded += 1
+        pbar.set_description(f"Downloading logs ({files_downloaded}/{len(new_keys)})")
+
+    pbar.close()
     print("Registros de log baixados com sucesso!!!")
-    return True  # Retorna True se new_keys não for vazia
+    return True
 
 
 def main():
-    print("\n\033[93mIniciando a função main...\033[0m")  # Amarelo
-
     data = get_remote_xml_data()
     found_keys = filter_key_tag(data)
     new_keys = get_new_keys(found_keys, url_base, logs_dir)
@@ -154,7 +124,7 @@ def format_duration(seconds):
 
 
 def schedule_job():
-    intervalo = random.uniform(8, 9)  # Gera um intervalo aleatório
+    intervalo = random.uniform(7, 9)  # Gera um intervalo aleatório
     print(f"\033[94mPróxima execução em {intervalo:.2f} horas\033[0m")  # Azul
     next_run_in = intervalo * 3600  # Convertendo horas em segundos
     return next_run_in
