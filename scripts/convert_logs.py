@@ -1,3 +1,4 @@
+import cProfile
 import datetime
 import json
 import os
@@ -100,7 +101,6 @@ def parse_unit_flag(flag):
 def parse_school_flag(school):
     s = int(school, 0) if isinstance(school, str) else school
 
-    res = []
     school_map = {
         0x1: "Physical",
         0x2: "Holy",
@@ -111,11 +111,7 @@ def parse_school_flag(school):
         0x40: "Arcane",
     }
 
-    for k, v in school_map.items():
-        if (s & k) > 0:
-            res.append(v)
-
-    return res
+    return [v for k, v in school_map.items() if s & k]
 
 
 """
@@ -548,7 +544,7 @@ class Parser:
         terms = line.split(" ")
 
         if len(terms) < 4:
-            raise Exception("invalid format, " + line)
+            raise Exception(f"Formato inválido: {line}")
 
         # split timestamp
         month, day = map(int, terms[0].split("/"))
@@ -644,11 +640,16 @@ class Parser:
         return obj
 
     def read_file(self, fname):
-        with open(fname, "r") as file:
-            for line in file:
-                # Ignora linhas vazias ou que contém apenas espaços em branco
-                if line.strip():
-                    yield self.parse_line(line)
+        if not os.path.exists(fname):
+            raise FileNotFoundError(f"Arquivo não encontrado: {fname}")
+
+        try:
+            with open(fname, "r") as file:
+                for line in file:
+                    if line.strip():  # ignora linhas vazias ou com espaços
+                        yield self.parse_line(line)
+        except IOError as e:
+            raise Exception(f"Erro ao ler o arquivo: {e}")
 
     def extract_spec_info(self, spec_id):
         data = [
@@ -1015,15 +1016,22 @@ class CombatantInfoParser:
         return self.parser.parse_combatant_info(ts, cols)
 
 
-if __name__ == "__main__":
+def main():
     p = Parser()
     dirname = os.path.dirname(__file__)
     input_filename = os.path.join(dirname, "dados_brutos_teste_v2.txt")
     output_filename = os.path.join(dirname, "output.json")
 
-    results = []
-    for a in p.read_file(input_filename):
-        results.append(a)
-
     with open(output_filename, "w") as json_file:
-        json.dump(results, json_file, indent=4)
+        json_file.write("[")
+        first = True
+        for a in p.read_file(input_filename):
+            if not first:
+                json_file.write(", ")
+            json.dump(a, json_file, indent=4)
+            first = False
+        json_file.write("]")
+
+
+if __name__ == "__main__":
+    cProfile.run("main()", "output.prof")
