@@ -168,7 +168,8 @@ class SupportParser:
         pass
 
     def parse(self, cols):
-        # Extrair o GUID do jogador de suporte e outros dados relevantes específicos de '_SUPPORT'
+        # Extrair o GUID do jogador de suporte e outros
+        # dados relevantes específicos de '_SUPPORT'
         return {
             "supportPlayerGUID": cols[
                 -1
@@ -439,7 +440,6 @@ class SpellAbsorbedParser:
 
     def parse(self, cols):
         if len(cols) >= 20:
-            print(80 * "#")
             return {
                 "casterGUID": cols[0],
                 "casterName": cols[1],
@@ -452,7 +452,6 @@ class SpellAbsorbedParser:
                 "critical": cols[8] != "nil",
             }
         else:
-            print(80 * "*")
             return {
                 "casterGUID": None,
                 "casterName": None,
@@ -552,14 +551,19 @@ class Parser:
             raise Exception("invalid format, " + line)
 
         # split timestamp
-        s = "{2} {0[0]:02d}/{0[1]:02d} {1}".format(
-            list(map(int, terms[0].split("/"))),
-            terms[1][:-4],
-            datetime.datetime.today().year,
-        )
-        d = datetime.datetime.strptime(s, "%Y %m/%d %H:%M:%S")
-        ts = time.mktime(d.timetuple()) + float(terms[1][-4:])
+        month, day = map(int, terms[0].split("/"))
+        s = f"{datetime.datetime.today().year:02d}/{month:02d}/{day:02d} {terms[1][:-4]}"
 
+        d = datetime.datetime.strptime(s, "%Y/%m/%d %H:%M:%S")
+
+        ts = time.mktime(d.timetuple()) + float(terms[1][-4:])
+        """
+        print(f"line = {line}")
+        print(f"terms = {terms}")
+        print(f"formato de d: {d}")
+        print(f"formato de s: {s}")
+        print(f"formato de ts: {ts}")
+        """
         # split CSV data
         csv_txt = " ".join(terms[3:]).strip()
 
@@ -572,6 +576,7 @@ class Parser:
         obj = self.parse_cols(ts, cols)
 
         print(obj)
+        # time.sleep(10)
 
         """
         if obj["event"] == "SPELL_AURA_APPLIED":
@@ -596,11 +601,9 @@ class Parser:
             obj.update(event_map[event].parse(cols[1:]))
             return obj
 
-        elif event == "COMBATANT_INFO":
-            return self.parse_combatant_info(ts, cols)
-
         if len(cols) < 8:
-            raise Exception("invalid format, " + repr(cols))
+            raise Exception("Invalid format, " + repr(cols))
+
         obj = {
             "timestamp": ts,
             "event": event,
@@ -614,40 +617,29 @@ class Parser:
             "destRaidFlags": parse_unit_flag(cols[8]),
         }
 
-        suffix = ""
-        prefix_psr = None
-        suffix_psr = None
-
-        matches = []
-        for k, p in self.ev_prefix.items():
+        prefix = None
+        for k in sorted(self.ev_prefix, key=len, reverse=True):
             if event.startswith(k):
-                matches.append(k)
+                prefix = k
+                break
 
-        if len(matches) > 0:
-            prefix = max(matches, key=len)
+        if prefix:
             prefix_psr = self.ev_prefix[prefix]
             suffix = event[len(prefix) :]
             suffix_psr = self.ev_suffix[suffix]
         else:
             for k, psrs in self.sp_event.items():
                 if event == k:
-                    (prefix_psr, suffix_psr) = psrs
+                    prefix_psr, suffix_psr = psrs
                     break
-        print(prefix_psr)
-        print(suffix_psr)
+
         if prefix_psr is None or suffix_psr is None:
             raise Exception("Unknown event format, " + repr(cols))
 
-        (res, remain) = prefix_psr.parse(cols[9:])
+        res, remain = prefix_psr.parse(cols[9:])
         obj.update(res)
         suffix_psr.raw = cols
         obj.update(suffix_psr.parse(remain))
-
-        # if obj['destName'] == 'Muret' and obj['event'] == 'SPELL_HEAL':
-        """
-        if obj['event'] == 'SPELL_DISPEL':
-            print obj
-        """
 
         return obj
 
@@ -787,7 +779,8 @@ class Parser:
                     "spec": player_class_data["Specs"][spec_id],
                 }
 
-        # Caso o spec_id não seja encontrado, podemos retornar um dicionário com uma mensagem de erro
+        # Caso o spec_id não seja encontrado, podemos
+        # retornar um dicionário com uma mensagem de erro
         return {"id": spec_id, "class": "Unknown", "spec": "Unknown"}
 
     def process_cols(self, cols, group_type):
@@ -954,10 +947,12 @@ class Parser:
         pvp_stats_raw = self.process_cols(cols, "pvpStats")
 
         if len(pvp_stats_raw) != 4:
-            # Print o numero de itens encontrados
-            print(f"Numero de itens encontrados: {len(pvp_stats_raw)}")
-            # Print o conteúdo da lista
-            print(f"Conteudo da lista: {pvp_stats_raw}")
+            error_message = (
+                f"Erro: número de itens esperado em 'pvp_stats_raw' é 4, encontrado: {len(pvp_stats_raw)}.\n"
+                f"Conteúdo da lista: {pvp_stats_raw}"
+            )
+            # Lançar exceção customizada com a mensagem de erro
+            raise error_message
 
         pvp_stats = [int(stat) for stat in pvp_stats_raw]
 
@@ -972,10 +967,6 @@ class Parser:
 
     def parse_combatant_info(self, ts, cols):
         # Esses prints foram adicionados para visualizar o formato dos dados
-        print("*" * 80)
-        print(cols)
-        print(type(cols))
-        print("*" * 80)
 
         info = {
             "timestamp": ts,
@@ -1027,12 +1018,11 @@ class CombatantInfoParser:
 if __name__ == "__main__":
     p = Parser()
     dirname = os.path.dirname(__file__)
-    input_filename = os.path.join(dirname, "dados_brutos_teste_v1.txt")
+    input_filename = os.path.join(dirname, "dados_brutos_teste_v2.txt")
     output_filename = os.path.join(dirname, "output.json")
 
     results = []
     for a in p.read_file(input_filename):
-        # Here I assume `a` is a dictionary like your provided example
         results.append(a)
 
     with open(output_filename, "w") as json_file:

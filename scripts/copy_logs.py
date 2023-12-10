@@ -73,7 +73,7 @@ def download_text_files(new_keys: set[str], logs_dir: Path) -> bool:
         return False  # Retorna False se new_keys for vazia
 
     print(f"Existem {len(new_keys)} registros para baixar.")
-    time.sleep(2)
+    # time.sleep(2)
 
     total_size = 0
     for url in new_keys:
