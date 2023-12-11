@@ -183,3 +183,4 @@ scripts/exemplos_tres_combatinfo.txt
 scripts/dados_brutos_teste_v1-1.txt
 .lprof/settings.json
 scripts/output.prof
+scripts/output_json
