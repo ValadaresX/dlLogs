@@ -1,4 +1,3 @@
-import cProfile
 import datetime
 import json
 import os
@@ -1023,15 +1022,13 @@ def main():
     output_filename = os.path.join(dirname, "output.json")
 
     with open(output_filename, "w") as json_file:
-        json_file.write("[")
         first = True
         for a in p.read_file(input_filename):
             if not first:
                 json_file.write(", ")
             json.dump(a, json_file, indent=4)
             first = False
-        json_file.write("]")
 
 
 if __name__ == "__main__":
-    cProfile.run("main()", "output.prof")
+    main()
