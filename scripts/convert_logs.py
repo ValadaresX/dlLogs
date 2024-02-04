@@ -1017,15 +1017,21 @@ class CombatantInfoParser:
 
 def main():
     p = Parser()
+    # Diretorio do arquivo
     dirname = os.path.dirname(__file__)
+    # Nome do arquivo de entrada
     input_filename = os.path.join(dirname, "dados_brutos_teste_v2.txt")
+    # Nome do arquivo de saida
     output_filename = os.path.join(dirname, "output.json")
 
+    # Cria o arquivo de saida
     with open(output_filename, "w") as json_file:
         first = True
+        # Lendo o arquivo de entrada
         for a in p.read_file(input_filename):
             if not first:
                 json_file.write(", ")
+
             json.dump(a, json_file, indent=4)
             first = False
 
