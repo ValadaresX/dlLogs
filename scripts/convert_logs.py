@@ -1,9 +1,13 @@
+import cProfile
+import csv
 import datetime
+import io
 import json
 import os
 import re
-import shlex
 import time
+
+# import shlex
 
 
 def resolv_power_type(pt):
@@ -563,14 +567,13 @@ class Parser:
         csv_txt = " ".join(terms[3:]).strip()
 
         # print(csv_txt + " csv_txt")
-        splitter = shlex.shlex(csv_txt, posix=True)
-
-        splitter.whitespace = ","
-        splitter.whitespace_split = True
-        cols = list(splitter)
+        csv_file = io.StringIO(csv_txt)
+        reader = csv.reader(csv_file, delimiter=",")
+        cols = next(reader)
         obj = self.parse_cols(ts, cols)
 
-        print(obj)
+        # Todo o print do log
+        # print(obj)
         # time.sleep(10)
 
         """
@@ -784,7 +787,7 @@ class Parser:
         return {"id": spec_id, "class": "Unknown", "spec": "Unknown"}
 
     def process_cols(self, cols, group_type):
-        # Convertendo a lista em uma string única
+        # Combinação de lista em uma string única
         combined_string = ",".join(cols).replace("@", ",")
 
         # Função para identificar delimitadores
@@ -811,7 +814,7 @@ class Parser:
         # Determinando a presença dos "Artifact Traits"
         artifact_traits_present = len(groups) > 4
 
-        # Mapeando os tipos de agrupamentos para seus índices na tupla
+        # Mapeamento dinâmico dos tipos de agrupamentos para seus índices na tupla
         group_mapping = {
             "class_talents": 0,
             "pvp_talents": 1,
@@ -831,10 +834,13 @@ class Parser:
         if group_type == "pvpStats":
             return combined_string.split(",")[-4:]
 
-        # Extraindo o agrupamento desejado
-        group_data = extract_group(
-            combined_string, groups, group_mapping.get(group_type)
-        )
+        # Extraindo o agrupamento desejado de forma dinâmica
+        index = group_mapping.get(group_type)
+        if index is not None:
+            group_data = extract_group(combined_string, groups, index)
+        else:
+            group_data = []  # Caso o tipo de grupo não esteja mapeado
+
         return group_data
 
     def extract_class_talents(self, cols):
@@ -966,7 +972,9 @@ class Parser:
         return pvp_stats_dict
 
     def parse_combatant_info(self, ts, cols):
-        # Esses prints foram adicionados para visualizar o formato dos dados
+        # print(80 * "-")
+        # print(cols)
+        # print(80 * "-")
 
         info = {
             "timestamp": ts,
@@ -1016,11 +1024,15 @@ class CombatantInfoParser:
 
 
 def main():
+    # Marca o tempo inicial
+    start_time = time.time()
+
+    # Intanciando o parser, analisa e separa os dados
     p = Parser()
     # Diretorio do arquivo
     dirname = os.path.dirname(__file__)
     # Nome do arquivo de entrada
-    input_filename = os.path.join(dirname, "dados_brutos_teste_v2.txt")
+    input_filename = os.path.join(dirname, "dados_brutos_teste_v3.txt")
     # Nome do arquivo de saida
     output_filename = os.path.join(dirname, "output.json")
 
@@ -1032,9 +1044,15 @@ def main():
             if not first:
                 json_file.write(", ")
 
-            json.dump(a, json_file, indent=4)
+            json.dump(a, json_file, ensure_ascii=False, indent=4)
             first = False
+    # Marca o tempo final em minutos e segundos
+    end_time = time.time()
+    tempo_execucao = end_time - start_time
+    # Formata a saída para ter 2 casas decimais
+    print(f"Tempo de execução: {tempo_execucao:.2f}")
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    cProfile.run("main()", "output_parse_combatant_info.prof")
