@@ -184,3 +184,5 @@ scripts/dados_brutos_teste_v1-1.txt
 .lprof/settings.json
 scripts/output.prof
 scripts/output_json
+scripts/output_parse_combatant_info.prof
+scripts/test_.ipynb
