@@ -98,7 +98,10 @@ def download_text_files(new_keys: set[str], logs_dir: Path) -> bool:
         encoding = chardet.detect(log_bytes)["encoding"]
         log_text = log_bytes.decode(encoding)
 
-        filename = os.path.join(logs_dir, os.path.basename(url) + ".txt")
+        filename = os.path.join(
+            logs_dir,
+            str(time.localtime().tm_year) + "_" + os.path.basename(url) + ".txt",
+        )
         with open(filename, "w", encoding="utf-8") as f:
             f.write(log_text)
 

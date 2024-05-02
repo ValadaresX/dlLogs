@@ -1,4 +1,3 @@
-import cProfile
 import csv
 import datetime
 import io
@@ -7,6 +6,8 @@ import os
 import re
 import time
 
+# from pathlib import Path
+# import cProfile
 # import shlex
 
 
@@ -538,40 +539,32 @@ class Parser:
         }
 
     def parse_line(self, line):
-        # Essa linha resolve o problema do matchType contendo espaços
-        if "Rated Solo Shuffle" in line:
-            line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
+        # Substituição de espaços em "Rated Solo Shuffle" por underscores
+        line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
 
+        # Substituição de vírgulas por @ em números entre parênteses
         line = re.sub(r"\(([\d,@]+)\)", lambda m: m.group().replace(",", "@"), line)
 
+        # Divisão da linha em termos
         terms = line.split(" ")
 
+        # Verificação do formato
         if len(terms) < 4:
             raise Exception(f"Formato inválido: {line}")
 
-        # split timestamp
+        # Processamento do timestamp
         month, day = map(int, terms[0].split("/"))
-        s = f"{datetime.datetime.today().year:02d}/{month:02d}/{day:02d} {terms[1][:-4]}"
-
+        year = datetime.datetime.today().year
+        s = f"{year:02d}/{month:02d}/{day:02d} {terms[1][:-4]}"
         d = datetime.datetime.strptime(s, "%Y/%m/%d %H:%M:%S")
-
         ts = time.mktime(d.timetuple()) + float(terms[1][-4:])
-        """
-        print(f"line = {line}")
-        print(f"terms = {terms}")
-        print(f"formato de d: {d}")
-        print(f"formato de s: {s}")
-        print(f"formato de ts: {ts}")
-        """
-        # split CSV data
-        csv_txt = " ".join(terms[3:]).strip()
 
-        # print(csv_txt + " csv_txt")
+        # Processamento dos dados CSV
+        csv_txt = " ".join(terms[3:]).strip()
         csv_file = io.StringIO(csv_txt)
         reader = csv.reader(csv_file, delimiter=",")
         cols = next(reader)
         obj = self.parse_cols(ts, cols)
-
         # Todo o print do log
         # print(obj)
         # time.sleep(10)
@@ -582,62 +575,71 @@ class Parser:
             for i in range(len(cols)):
                 print(i), cols[i]
         """
+
         return obj
 
     def parse_cols(self, ts, cols):
         event = cols[0]
-        event_map = {**self.enc_event, **self.arena_event, **self.combat_player_info}
+        obj = {"timestamp": ts, "event": event}
 
+        # Aproveitando a lógica para eventos conhecidos e utilizando um mapa consolidado de eventos.
         if event == "COMBATANT_INFO":
             return self.parse_combatant_info(ts, cols)
 
+        # Criando o mapa de eventos na chamada para considerar possíveis mudanças dinâmicas.
+        event_map = {**self.enc_event, **self.arena_event, **self.combat_player_info}
         if event in event_map:
-            obj = {
-                "timestamp": ts,
-                "event": event,
-            }
-            obj.update(event_map[event].parse(cols[1:]))
+            parsed_data = event_map[event].parse(cols[1:])
+            obj.update(parsed_data)
             return obj
 
-        if len(cols) < 8:
+        # Validação do formato de entrada para garantir que existem colunas suficientes.
+        if len(cols) < 9:
             raise Exception("Invalid format, " + repr(cols))
 
-        obj = {
-            "timestamp": ts,
-            "event": event,
-            "sourceGUID": cols[1],
-            "sourceName": cols[2],
-            "sourceFlags": parse_unit_flag(cols[3]),
-            "sourceRaidFlags": parse_unit_flag(cols[4]),
-            "destGUID": cols[5],
-            "destName": cols[6],
-            "destFlags": parse_unit_flag(cols[7]),
-            "destRaidFlags": parse_unit_flag(cols[8]),
-        }
+        # Atualização direta do dicionário com informações detalhadas dos combatentes.
+        obj.update(
+            {
+                "sourceGUID": cols[1],
+                "sourceName": cols[2],
+                "sourceFlags": parse_unit_flag(cols[3]),
+                "sourceRaidFlags": parse_unit_flag(cols[4]),
+                "destGUID": cols[5],
+                "destName": cols[6],
+                "destFlags": parse_unit_flag(cols[7]),
+                "destRaidFlags": parse_unit_flag(cols[8]),
+            }
+        )
 
-        prefix = None
-        for k in sorted(self.ev_prefix, key=len, reverse=True):
-            if event.startswith(k):
-                prefix = k
-                break
-
+        # Melhoria na busca de prefixos, considerando otimizações futuras para evitar reordenação constante.
+        prefix = next(
+            (
+                k
+                for k in sorted(self.ev_prefix, key=len, reverse=True)
+                if event.startswith(k)
+            ),
+            None,
+        )
         if prefix:
-            prefix_psr = self.ev_prefix[prefix]
             suffix = event[len(prefix) :]
-            suffix_psr = self.ev_suffix[suffix]
+            suffix_psr = self.ev_suffix.get(suffix)
+            if suffix_psr is not None:
+                res, remain = self.ev_prefix[prefix].parse(cols[9:])
+                obj.update(res)
+                suffix_psr.raw = cols
+                obj.update(suffix_psr.parse(remain))
+            else:
+                raise Exception("Unknown event suffix format, " + repr(cols))
         else:
-            for k, psrs in self.sp_event.items():
-                if event == k:
-                    prefix_psr, suffix_psr = psrs
-                    break
-
-        if prefix_psr is None or suffix_psr is None:
-            raise Exception("Unknown event format, " + repr(cols))
-
-        res, remain = prefix_psr.parse(cols[9:])
-        obj.update(res)
-        suffix_psr.raw = cols
-        obj.update(suffix_psr.parse(remain))
+            # Tratamento de eventos especiais sem prefixo conhecido.
+            psr_tuple = self.sp_event.get(event)
+            if psr_tuple is not None:
+                prefix_psr, suffix_psr = psr_tuple
+                res, remain = prefix_psr.parse(cols[9:])
+                obj.update(res)
+                obj.update(suffix_psr.parse(remain))
+            else:
+                raise Exception("Unknown event format, " + repr(cols))
 
         return obj
 
@@ -825,10 +827,8 @@ class Parser:
 
         # Função para extrair um agrupamento específico
         def extract_group(combined_string, group_indices, index):
-            if index is None or index >= len(group_indices):
-                return []
             start, end = group_indices[index]
-            return combined_string[start + 1 : end].split(",")
+            return combined_string[start + 1 : end].split(",", end - start - 1)
 
         # Tratando o caso especial de pvpStats
         if group_type == "pvpStats":
@@ -1024,35 +1024,24 @@ class CombatantInfoParser:
 
 
 def main():
-    # Marca o tempo inicial
+    input_file = os.path.join(os.path.dirname(__file__), "dados_brutos_teste_v3.txt")
+    output_file = os.path.join(os.path.dirname(__file__), "output.json")
+    # contador de tempo de execução
     start_time = time.time()
-
-    # Intanciando o parser, analisa e separa os dados
-    p = Parser()
-    # Diretorio do arquivo
-    dirname = os.path.dirname(__file__)
-    # Nome do arquivo de entrada
-    input_filename = os.path.join(dirname, "dados_brutos_teste_v3.txt")
-    # Nome do arquivo de saida
-    output_filename = os.path.join(dirname, "output.json")
-
-    # Cria o arquivo de saida
-    with open(output_filename, "w") as json_file:
+    with open(output_file, "w") as f:
+        f.write("[")
         first = True
-        # Lendo o arquivo de entrada
-        for a in p.read_file(input_filename):
+        parser = Parser()
+        for data in parser.read_file(input_file):
             if not first:
-                json_file.write(", ")
-
-            json.dump(a, json_file, ensure_ascii=False, indent=4)
+                f.write(", ")
+            json.dump(data, f, ensure_ascii=False, indent=4)
             first = False
-    # Marca o tempo final em minutos e segundos
-    end_time = time.time()
-    tempo_execucao = end_time - start_time
-    # Formata a saída para ter 2 casas decimais
-    print(f"Tempo de execução: {tempo_execucao:.2f}")
+        f.write("]")
+        # print do tempo de execução em segundos
+        print(f"Tempo de execução: {time.time() - start_time:.2f} segundos")
 
 
 if __name__ == "__main__":
-    # main()
-    cProfile.run("main()", "output_parse_combatant_info.prof")
+    main()
+    # cProfile.run("main()", "output_parse_combatant_info.prof")
