@@ -186,3 +186,4 @@ scripts/output.prof
 scripts/output_json
 scripts/output_parse_combatant_info.prof
 scripts/test_.ipynb
+scripts/output_parse_combatant_info.prof
