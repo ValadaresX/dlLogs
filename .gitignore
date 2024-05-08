@@ -187,3 +187,10 @@ scripts/output_json
 scripts/output_parse_combatant_info.prof
 scripts/test_.ipynb
 scripts/output_parse_combatant_info.prof
+doc/
+log_converted/
+scripts/dados_brutos_teste_v1_convertido.json
+scripts/dados_brutos_teste_v2_convertido.json
+scripts/convert_logs.log.bak
+main_content.html
+scripts/logs_test
