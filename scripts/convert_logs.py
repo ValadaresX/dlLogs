@@ -1,13 +1,14 @@
+# import cProfile
 import csv
 import datetime
 import io
 import json
+import logging
 import os
 import re
 import time
+from pathlib import Path
 
-# from pathlib import Path
-# import cProfile
 # import shlex
 
 
@@ -178,24 +179,50 @@ class SupportParser:
         }
 
 
+class WorldPrefixParser:
+    def __init__(self):
+        pass
+
+    def parse(self, cols):
+        # Você pode extrair informações adicionais aqui, se necessário
+        return ({}, cols[1:])  # Retornar um dicionário vazio e o restante dos dados
+
+
+class WorldMarkerParser:
+    def __init__(self):
+        pass
+
+    def parse(self, cols):
+        return {
+            "mapId": int(cols[1]),  # Extrair mapId
+            "markerId": int(cols[2]),  # Extrair markerId
+            "x": float(cols[3]),  # Extrair coordenada x
+            "y": float(cols[4]),  # Extrair coordenada y
+        }
+
+
 class DamageParser:
     def __init__(self):
         pass
 
     def parse(self, cols):
         cols = cols[8:]
-
-        return {
-            "amount": int(cols[0]),
-            "overkill": cols[1],
-            "school": parse_school_flag(cols[2]),
-            "resisted": int(cols[3]),
-            "blocked": float(cols[4]),
-            "absorbed": float(cols[5]),
-            "critical": (cols[6] != "nil"),
-            "glancing": (cols[7] != "nil"),
-            "crushing": (cols[8] != "nil"),
-        }
+        try:
+            return {
+                "amount": int(cols[0]),
+                "overkill": cols[1],
+                "school": parse_school_flag(cols[2]),
+                "resisted": float(cols[3]),  # Usar float() para conversão
+                "blocked": float(cols[4]),
+                "absorbed": float(cols[5]),
+                "critical": (cols[6] != "nil"),
+                "glancing": (cols[7] != "nil"),
+                "crushing": (cols[8] != "nil"),
+            }
+        except ValueError as e:
+            logging.error(f"Erro ao analisar ENVIRONMENTAL_DAMAGE: {e}")
+            # Lidar com o erro (ex: retornar dicionário vazio)
+            return {}
 
 
 class MissParser:
@@ -225,6 +252,26 @@ class HealParser:
         }
 
 
+class HealAbsorbedParser:
+    def __init__(self):
+        pass
+
+    def parse(self, cols):
+        # Extrair informações relevantes
+        return {
+            "casterGUID": cols[0],
+            "casterName": cols[1],
+            "casterFlags": parse_unit_flag(cols[2]),
+            "casterRaidFlags": parse_unit_flag(cols[3]),
+            "absorbSpellId": cols[4],
+            "absorbSpellName": cols[5],
+            "absorbSpellSchool": parse_school_flag(cols[6]),
+            "amount": int(cols[7]),
+            "totalAmount": int(cols[8]),  # Parâmetro adicional da documentação
+            "critical": cols[8] != "nil",
+        }
+
+
 class EnergizeParser:
     def __init__(self):
         pass
@@ -242,12 +289,15 @@ class DrainParser:
         pass
 
     def parse(self, cols):
-        if len(cols) != 3:
-            print(cols)
+        amount = int(cols[11])
+        powerType = resolv_power_type(cols[12])
+        maxPower = float(cols[13])  # Converter para float
+        extraAmount = int(cols[14])  # Ajustar índice para 14
         return {
-            "amount": int(cols[0]),
-            "powerType": resolv_power_type(cols[1]),
-            "extraAmount": int(cols[2]),
+            "amount": amount,
+            "powerType": powerType,
+            "maxPower": maxPower,  # Adicionar ao dicionário
+            "extraAmount": extraAmount,
         }
 
 
@@ -474,8 +524,11 @@ class Parser:
             "SPELL": SpellParser(),
             "RANGE": SpellParser(),
             "ENVIRONMENTAL": EnvParser(),
+            "WORLD": WorldPrefixParser(),
         }
         self.ev_suffix = {
+            "_MARKER_PLACED": WorldMarkerParser(),
+            "_HEAL_ABSORBED": HealAbsorbedParser(),
             "_DAMAGE_SUPPORT": DamageParser(),
             "_HEAL_SUPPORT": HealParser(),
             "_ABSORBED_SUPPORT": SpellAbsorbedParser(),
@@ -579,79 +632,164 @@ class Parser:
         return obj
 
     def parse_cols(self, ts, cols):
+        """
+        Analisa as colunas de um evento de log e retorna um dicionário com as informações extraídas.
+
+        Args:
+            ts (float): O timestamp do evento.
+            cols (list): Uma lista de strings representando as colunas do evento.
+
+        Returns:
+            dict: Um dicionário com as informações extraídas do evento, ou um dicionário vazio se ocorrer um erro.
+        """
+
         event = cols[0]
+
+        # Tratamento inicial para eventos específicos
+        if event in ("WORLD_MARKER_PLACED", "WORLD_MARKER_REMOVED"):
+            logging.debug(f"Ignorando evento: {event}")
+            return {}  # Retornar dicionário vazio para eventos ignorados
+
         obj = {"timestamp": ts, "event": event}
 
-        # Aproveitando a lógica para eventos conhecidos e utilizando um mapa consolidado de eventos.
-        if event == "COMBATANT_INFO":
-            return self.parse_combatant_info(ts, cols)
+        try:
+            # Eventos com tratamento especial
+            if event == "COMBATANT_INFO":
+                return self.parse_combatant_info(ts, cols)
 
-        # Criando o mapa de eventos na chamada para considerar possíveis mudanças dinâmicas.
-        event_map = {**self.enc_event, **self.arena_event, **self.combat_player_info}
-        if event in event_map:
-            parsed_data = event_map[event].parse(cols[1:])
-            obj.update(parsed_data)
-            return obj
-
-        # Validação do formato de entrada para garantir que existem colunas suficientes.
-        if len(cols) < 9:
-            raise Exception("Invalid format, " + repr(cols))
-
-        # Atualização direta do dicionário com informações detalhadas dos combatentes.
-        obj.update(
-            {
-                "sourceGUID": cols[1],
-                "sourceName": cols[2],
-                "sourceFlags": parse_unit_flag(cols[3]),
-                "sourceRaidFlags": parse_unit_flag(cols[4]),
-                "destGUID": cols[5],
-                "destName": cols[6],
-                "destFlags": parse_unit_flag(cols[7]),
-                "destRaidFlags": parse_unit_flag(cols[8]),
+            # Eventos com mapeamento direto
+            event_map = {
+                **self.enc_event,
+                **self.arena_event,
+                **self.combat_player_info,
             }
-        )
+            if event in event_map:
+                parsed_data = event_map[event].parse(cols[1:])
+                obj.update(parsed_data)
+                return obj
 
-        # Melhoria na busca de prefixos, considerando otimizações futuras para evitar reordenação constante.
-        prefix = next(
-            (
-                k
-                for k in sorted(self.ev_prefix, key=len, reverse=True)
-                if event.startswith(k)
-            ),
-            None,
-        )
-        if prefix:
-            suffix = event[len(prefix) :]
-            suffix_psr = self.ev_suffix.get(suffix)
-            if suffix_psr is not None:
-                res, remain = self.ev_prefix[prefix].parse(cols[9:])
-                obj.update(res)
-                suffix_psr.raw = cols
-                obj.update(suffix_psr.parse(remain))
+            # Validação do número de colunas
+            if len(cols) < 9:
+                raise ValueError(
+                    f"Formato inválido para evento {event}: número de colunas insuficiente ({len(cols)} < 9)"
+                )
+
+            # Informações dos combatentes
+            try:
+                source_flags = parse_unit_flag(cols[3])
+                source_raid_flags = parse_unit_flag(cols[4])
+            except ValueError as e:
+                raise ValueError(f"Erro ao analisar flags de unidade: {e}") from e
+
+            obj.update(
+                {
+                    "sourceGUID": cols[1],
+                    "sourceName": cols[2],
+                    "sourceFlags": source_flags,
+                    "sourceRaidFlags": source_raid_flags,
+                    "destGUID": cols[5],
+                    "destName": cols[6],
+                    "destFlags": source_flags,  # Reutilizar o valor
+                    "destRaidFlags": source_raid_flags,  # Reutilizar o valor
+                }
+            )
+
+            # Busca de parser de sufixo
+            suffix_parser = self.ev_suffix.get(event)
+            if suffix_parser:
+                try:
+                    obj.update(suffix_parser.parse(cols[9:]))
+                except ValueError as e:
+                    raise ValueError(f"Erro ao analisar sufixo do evento: {e}") from e
+                return obj
+
+            # Busca de prefixo e sufixo
+            prefix_map = {
+                prefixo: self.ev_prefix[prefixo]
+                for prefixo in sorted(self.ev_prefix, key=len, reverse=True)
+            }
+            for prefixo in sorted(prefix_map, key=len, reverse=True):
+                if event.startswith(prefixo):
+                    break
             else:
-                raise Exception("Unknown event suffix format, " + repr(cols))
-        else:
-            # Tratamento de eventos especiais sem prefixo conhecido.
-            psr_tuple = self.sp_event.get(event)
-            if psr_tuple is not None:
-                prefix_psr, suffix_psr = psr_tuple
-                res, remain = prefix_psr.parse(cols[9:])
-                obj.update(res)
-                obj.update(suffix_psr.parse(remain))
+                prefixo = None
+
+            if prefixo:
+                suffixo = event[len(prefixo) :]
+                suffix_parser = self.ev_suffix.get(suffixo)
+                if suffix_parser:
+                    try:
+                        resultado, restante = prefix_map[prefixo].parse(cols[9:])
+                        obj.update(resultado)
+                        suffix_parser.raw = cols
+                        obj.update(suffix_parser.parse(restante))
+                    except ValueError as e:
+                        raise ValueError(
+                            f"Erro ao analisar prefixo ou sufixo do evento: {e}"
+                        ) from e
+                else:
+                    raise ValueError(f"Sufixo de evento desconhecido: {suffixo}")
             else:
-                raise Exception("Unknown event format, " + repr(cols))
+                # Tratamento de eventos especiais
+                parser_tuple = self.sp_event.get(event)
+                if parser_tuple:
+                    try:
+                        prefixo_parser, sufixo_parser = parser_tuple
+                        resultado, restante = prefixo_parser.parse(cols[9:])
+                        obj.update(resultado)
+                        obj.update(sufixo_parser.parse(restante))
+                    except ValueError as e:
+                        raise ValueError(
+                            f"Erro ao analisar evento especial: {e}"
+                        ) from e
+                else:
+                    raise ValueError(f"Formato de evento desconhecido: {event}")
+
+        except ValueError as e:
+            logging.error(
+                f"Erro ao analisar evento: {event}\nLinha: {','.join(cols)}\nErro: {e}"
+            )
+            return {}
 
         return obj
 
     def read_file(self, fname):
+        """
+        Lê um arquivo de log e retorna um gerador de dicionários com as informações de cada evento.
+
+        Args:
+            fname (str): O nome do arquivo de log.
+
+        Returns:
+            Generator: Um gerador de dicionários com as informações de cada evento, ou um gerador vazio se o arquivo estiver corrompido.
+        """
         if not os.path.exists(fname):
             raise FileNotFoundError(f"Arquivo não encontrado: {fname}")
 
         try:
-            with open(fname, "r") as file:
+            with open(fname, "r", encoding="utf-8") as file:
+                first_line = file.readline()  # Ler a primeira linha
+
+                if not first_line or first_line.isspace() or "\x00" in first_line:
+                    logging.warning(f"Arquivo corrompido: {fname}")
+                    return  # Pular o arquivo corrompido
+
+                if "ARENA_MATCH_START" not in first_line:
+                    logging.warning(f"Arquivo com formato inválido: {fname}")
+                    return  # Ignorar o arquivo
+
+                yield self.parse_line(first_line)  # Processar a primeira linha
+
                 for line in file:
-                    if line.strip():  # ignora linhas vazias ou com espaços
-                        yield self.parse_line(line)
+                    if line.strip():  # Ignora linhas vazias ou com espaços
+                        try:
+                            yield self.parse_line(line)
+                        except ValueError as e:
+                            logging.error(
+                                f"Erro ao analisar linha no arquivo {fname}: {e}"
+                            )
+                            logging.error(f"Linha com erro: {line}")
+                            # Continuar processando outras linhas
         except IOError as e:
             raise Exception(f"Erro ao ler o arquivo: {e}")
 
@@ -1024,22 +1162,45 @@ class CombatantInfoParser:
 
 
 def main():
-    input_file = os.path.join(os.path.dirname(__file__), "dados_brutos_teste_v3.txt")
-    output_file = os.path.join(os.path.dirname(__file__), "output.json")
-    # contador de tempo de execução
-    start_time = time.time()
-    with open(output_file, "w") as f:
-        f.write("[")
-        first = True
-        parser = Parser()
-        for data in parser.read_file(input_file):
-            if not first:
+    input_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\logs")
+    output_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\output_json")
+
+    # Cria o diretório de saída se não existir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # start_time = time.time()
+    logging.basicConfig(
+        filename="convert_logs.log",
+        level=logging.WARN,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+    # Processa cada arquivo .txt no diretório de entrada
+    parser = Parser()  # Inicializar o objeto Parser aqui
+
+    for file_path in input_dir.glob("*.txt"):
+        logging.info(f"Processando arquivo: {file_path}")
+        output_file_path = output_dir / (file_path.stem + ".json")
+
+        # Obter o gerador de dados
+        data_generator = parser.read_file(str(file_path))
+
+        # Verificar se o gerador está vazio (arquivo corrompido ou inválido)
+        try:
+            first_item = next(data_generator)
+        except StopIteration:
+            logging.warning(f"Pulando arquivo vazio ou corrompido: {file_path}")
+            continue  # Pular para o próximo arquivo
+
+        # Escrever o primeiro item no arquivo JSON
+        with open(output_file_path, "w", encoding="utf-8") as f:
+            f.write("[")
+            json.dump(first_item, f, ensure_ascii=False, indent=4)
+
+            # Escrever os demais itens
+            for data in data_generator:
                 f.write(", ")
-            json.dump(data, f, ensure_ascii=False, indent=4)
-            first = False
-        f.write("]")
-        # print do tempo de execução em segundos
-        print(f"Tempo de execução: {time.time() - start_time:.2f} segundos")
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            f.write("]")
 
 
 if __name__ == "__main__":
