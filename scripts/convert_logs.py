@@ -6,8 +6,12 @@ import json
 import logging
 import os
 import re
+import sys
 import time
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
+
+from tqdm import tqdm
 
 # import shlex
 
@@ -670,16 +674,21 @@ class Parser:
 
             # Validação do número de colunas
             if len(cols) < 9:
-                raise ValueError(
-                    f"Formato inválido para evento {event}: número de colunas insuficiente ({len(cols)} < 9)"
+                logging.error(
+                    "Formato inválido para evento %s: número de colunas insuficiente (%s < 9)",
+                    event,
+                    len(cols),
                 )
+                return {}
 
             # Informações dos combatentes
+
             try:
                 source_flags = parse_unit_flag(cols[3])
                 source_raid_flags = parse_unit_flag(cols[4])
             except ValueError as e:
-                raise ValueError(f"Erro ao analisar flags de unidade: {e}") from e
+                logging.error("Erro ao analisar flags de unidade: %s", e)
+                return {}
 
             obj.update(
                 {
@@ -700,7 +709,8 @@ class Parser:
                 try:
                     obj.update(suffix_parser.parse(cols[9:]))
                 except ValueError as e:
-                    raise ValueError(f"Erro ao analisar sufixo do evento: {e}") from e
+                    logging.error("Erro ao analisar sufixo do evento: %s", e)
+                    return {}
                 return obj
 
             # Busca de prefixo e sufixo
@@ -724,11 +734,13 @@ class Parser:
                         suffix_parser.raw = cols
                         obj.update(suffix_parser.parse(restante))
                     except ValueError as e:
-                        raise ValueError(
-                            f"Erro ao analisar prefixo ou sufixo do evento: {e}"
-                        ) from e
+                        logging.error(
+                            "Erro ao analisar prefixo ou sufixo do evento: %s", e
+                        )
+                        return {}
                 else:
-                    raise ValueError(f"Sufixo de evento desconhecido: {suffixo}")
+                    logging.error("Sufixo de evento desconhecido: %s", suffixo)
+                    return {}
             else:
                 # Tratamento de eventos especiais
                 parser_tuple = self.sp_event.get(event)
@@ -739,15 +751,18 @@ class Parser:
                         obj.update(resultado)
                         obj.update(sufixo_parser.parse(restante))
                     except ValueError as e:
-                        raise ValueError(
-                            f"Erro ao analisar evento especial: {e}"
-                        ) from e
+                        logging.error("Erro ao analisar evento especial: %s", e)
+                        return {}
                 else:
-                    raise ValueError(f"Formato de evento desconhecido: {event}")
+                    logging.error("Formato de evento desconhecido: %s", event)
+                    return {}
 
         except ValueError as e:
             logging.error(
-                f"Erro ao analisar evento: {event}\nLinha: {','.join(cols)}\nErro: {e}"
+                "Erro ao analisar evento: %s\nLinha: %s\nErro: %s",
+                event,
+                ",".join(cols),
+                e,
             )
             return {}
 
@@ -764,18 +779,20 @@ class Parser:
             Generator: Um gerador de dicionários com as informações de cada evento, ou um gerador vazio se o arquivo estiver corrompido.
         """
         if not os.path.exists(fname):
-            raise FileNotFoundError(f"Arquivo não encontrado: {fname}")
+            logging.error("Arquivo não encontrado: %s", fname)
+            return
 
         try:
-            with open(fname, "r", encoding="utf-8") as file:
+            with open(fname, "r", encoding="utf-8", buffering=8192) as file:
                 first_line = file.readline()  # Ler a primeira linha
 
+                # Verificação de arquivo corrompido
                 if not first_line or first_line.isspace() or "\x00" in first_line:
-                    logging.warning(f"Arquivo corrompido: {fname}")
+                    logging.warning("Arquivo corrompido: %s", fname)
                     return  # Pular o arquivo corrompido
 
                 if "ARENA_MATCH_START" not in first_line:
-                    logging.warning(f"Arquivo com formato inválido: {fname}")
+                    logging.warning("Arquivo com formato inválido: %s", fname)
                     return  # Ignorar o arquivo
 
                 yield self.parse_line(first_line)  # Processar a primeira linha
@@ -786,12 +803,12 @@ class Parser:
                             yield self.parse_line(line)
                         except ValueError as e:
                             logging.error(
-                                f"Erro ao analisar linha no arquivo {fname}: {e}"
+                                "Erro ao analisar linha no arquivo %s: %s", fname, e
                             )
-                            logging.error(f"Linha com erro: {line}")
-                            # Continuar processando outras linhas
+                            logging.error("Linha com erro: %s", line)
+                            return  # Abandonar o arquivo se uma exceção for encontrada
         except IOError as e:
-            raise Exception(f"Erro ao ler o arquivo: {e}")
+            logging.error("Erro ao ler o arquivo: %s", e)
 
     def extract_spec_info(self, spec_id):
         data = [
@@ -1161,48 +1178,107 @@ class CombatantInfoParser:
         return self.parser.parse_combatant_info(ts, cols)
 
 
+def setup_logging(log_file="convert_logs.log"):
+    # Remover todos os handlers existentes
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
+    # Adicionar apenas o FileHandler
+    logging.basicConfig(
+        level=logging.WARN,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file)],
+    )
+
+
+def create_output_dir(output_dir):
+    """Cria o diretório de saída se ele não existir.
+
+    Args:
+        output_dir (Path): O caminho do diretório de saída.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+
+def write_json(output_file_path, first_item, data_generator):
+    """Escreve os dados em um arquivo JSON.
+
+    Args:
+        output_file_path (Path): O caminho para o arquivo JSON de saída.
+        first_item (dict): O primeiro item a ser escrito no arquivo JSON.
+        data_generator (generator): Um gerador de dados restantes a serem escritos.
+    """
+    with open(output_file_path, "w", encoding="utf-8", buffering=8192) as f:
+        json.dump([first_item] + list(data_generator), f, ensure_ascii=False, indent=4)
+
+
+def process_single_file(args):
+    parser, file_path, output_dir = args
+    setup_logging()  # Certifique-se de configurar o logging em cada processo filho
+    output_file_path = output_dir / f"{file_path.stem}.json"
+    try:
+        data_generator = parser.read_file(str(file_path))
+        first_item = next(data_generator, None)
+
+        if first_item:
+            with open(output_file_path, "w", encoding="utf-8") as f:
+                f.write("[")
+                json.dump(first_item, f, ensure_ascii=False, indent=4)
+
+                for data in data_generator:
+                    f.write(", ")
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+                f.write("]")
+
+            logging.info("Arquivo JSON gravado: %s", output_file_path)
+
+    except Exception as e:
+        logging.error("Erro ao processar %s: %s", file_path, e)
+
+
+def process_files(parser, txt_files, output_dir, max_workers=None):
+    """Processa múltiplos arquivos em paralelo.
+
+    Args:
+        parser (Parser): O objeto Parser para leitura dos arquivos.
+        txt_files (list): Lista de caminhos para os arquivos de entrada.
+        output_dir (Path): O caminho para o diretório de saída.
+        max_workers (int, optional): Número máximo de processos a serem usados
+        para paralelismo. Default é o número de CPUs.
+    """
+    if max_workers is None:
+        max_workers = min(
+            4, cpu_count()
+        )  # Limita a 4 processos ou o número de CPUs disponíveis
+
+    with Pool(processes=max_workers) as pool:
+        args = [(parser, file_path, output_dir) for file_path in txt_files]
+        for _ in tqdm(
+            pool.imap_unordered(process_single_file, args),
+            total=len(txt_files),
+            desc="Convertendo arquivos",
+        ):
+            pass
+
+
 def main():
-    input_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\logs")
+    """Função principal que gerencia a criação do diretório de saída,
+    configuração de logging e processamento dos arquivos de entrada.
+    """
+    setup_logging()
+    input_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\logs_test")
     output_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\output_json")
 
     # Cria o diretório de saída se não existir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # start_time = time.time()
-    logging.basicConfig(
-        filename="convert_logs.log",
-        level=logging.WARN,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
-    # Processa cada arquivo .txt no diretório de entrada
     parser = Parser()  # Inicializar o objeto Parser aqui
+    txt_files = list(input_dir.glob("*.txt"))
+    total_files = len(txt_files)
+    logging.debug("Iniciando processamento de %s arquivos.", total_files)
 
-    for file_path in input_dir.glob("*.txt"):
-        logging.info(f"Processando arquivo: {file_path}")
-        output_file_path = output_dir / (file_path.stem + ".json")
-
-        # Obter o gerador de dados
-        data_generator = parser.read_file(str(file_path))
-
-        # Verificar se o gerador está vazio (arquivo corrompido ou inválido)
-        try:
-            first_item = next(data_generator)
-        except StopIteration:
-            logging.warning(f"Pulando arquivo vazio ou corrompido: {file_path}")
-            continue  # Pular para o próximo arquivo
-
-        # Escrever o primeiro item no arquivo JSON
-        with open(output_file_path, "w", encoding="utf-8") as f:
-            f.write("[")
-            json.dump(first_item, f, ensure_ascii=False, indent=4)
-
-            # Escrever os demais itens
-            for data in data_generator:
-                f.write(", ")
-                json.dump(data, f, ensure_ascii=False, indent=4)
-            f.write("]")
+    process_files(parser, txt_files, output_dir)
 
 
 if __name__ == "__main__":
     main()
-    # cProfile.run("main()", "output_parse_combatant_info.prof")
