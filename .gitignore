@@ -194,3 +194,4 @@ scripts/dados_brutos_teste_v2_convertido.json
 scripts/convert_logs.log.bak
 main_content.html
 scripts/logs_test
+scripts/profile_output.txt
