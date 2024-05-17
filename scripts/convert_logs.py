@@ -1,4 +1,4 @@
-# import cProfile
+# Imports padrão da biblioteca
 import csv
 import datetime
 import io
@@ -6,14 +6,16 @@ import json
 import logging
 import os
 import re
-import sys
 import time
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
+# Imports de terceiros
+from colorama import Fore, Style
+from rich.console import Console
+from rich.table import Table, box
+from rich.theme import Theme
 from tqdm import tqdm
-
-# import shlex
 
 
 def resolv_power_type(pt):
@@ -637,14 +639,17 @@ class Parser:
 
     def parse_cols(self, ts, cols):
         """
-        Analisa as colunas de um evento de log e retorna um dicionário com as informações extraídas.
+        Analisa as colunas de um evento de log e retorna um dicionário
+        com as informações extraídas.
 
         Args:
             ts (float): O timestamp do evento.
-            cols (list): Uma lista de strings representando as colunas do evento.
+            cols (list): Uma lista de strings
+            representando as colunas do evento.
 
         Returns:
-            dict: Um dicionário com as informações extraídas do evento, ou um dicionário vazio se ocorrer um erro.
+            dict: Um dicionário com as informações extraídas do evento,
+            ou um dicionário vazio se ocorrer um erro.
         """
 
         event = cols[0]
@@ -770,13 +775,15 @@ class Parser:
 
     def read_file(self, fname):
         """
-        Lê um arquivo de log e retorna um gerador de dicionários com as informações de cada evento.
+        Lê um arquivo de log e retorna um gerador de dicionários com as
+        informações de cada evento.
 
         Args:
             fname (str): O nome do arquivo de log.
 
         Returns:
-            Generator: Um gerador de dicionários com as informações de cada evento, ou um gerador vazio se o arquivo estiver corrompido.
+            Generator: Um gerador de dicionários com as informações de
+            cada evento, ou um gerador vazio se o arquivo estiver corrompido.
         """
         if not os.path.exists(fname):
             logging.error("Arquivo não encontrado: %s", fname)
@@ -1109,7 +1116,8 @@ class Parser:
 
         if len(pvp_stats_raw) != 4:
             error_message = (
-                f"Erro: número de itens esperado em 'pvp_stats_raw' é 4, encontrado: {len(pvp_stats_raw)}.\n"
+                f"Erro: número de itens esperado em 'pvp_stats_raw' é 4, "
+                f"encontrado: {len(pvp_stats_raw)}.\n"
                 f"Conteúdo da lista: {pvp_stats_raw}"
             )
             # Lançar exceção customizada com a mensagem de erro
@@ -1191,27 +1199,6 @@ def setup_logging(log_file="convert_logs.log"):
     )
 
 
-def create_output_dir(output_dir):
-    """Cria o diretório de saída se ele não existir.
-
-    Args:
-        output_dir (Path): O caminho do diretório de saída.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-
-def write_json(output_file_path, first_item, data_generator):
-    """Escreve os dados em um arquivo JSON.
-
-    Args:
-        output_file_path (Path): O caminho para o arquivo JSON de saída.
-        first_item (dict): O primeiro item a ser escrito no arquivo JSON.
-        data_generator (generator): Um gerador de dados restantes a serem escritos.
-    """
-    with open(output_file_path, "w", encoding="utf-8", buffering=8192) as f:
-        json.dump([first_item] + list(data_generator), f, ensure_ascii=False, indent=4)
-
-
 def process_single_file(args):
     parser, file_path, output_dir = args
     setup_logging()  # Certifique-se de configurar o logging em cada processo filho
@@ -1256,9 +1243,63 @@ def process_files(parser, txt_files, output_dir, max_workers=None):
         for _ in tqdm(
             pool.imap_unordered(process_single_file, args),
             total=len(txt_files),
-            desc="Convertendo arquivos",
+            desc=f"{Fore.GREEN}Converting files{Style.RESET_ALL}",
+            bar_format="{l_bar}%s{bar}%s{r_bar}"
+            % (Fore.LIGHTGREEN_EX, Style.RESET_ALL),  # Cor da barra
+            colour=None,  # Desativa a coloração automática do `tqdm`
         ):
             pass
+
+
+def check_and_create_directories(input_dir, output_dir):
+    # Inicializa o console do Rich com um tema personalizado
+    custom_theme = Theme(
+        {
+            "created": "bold yellow",  # Cor para pastas criadas
+            "exists": "bold green",  # Cor para pastas que existem
+            "error": "bold red",  # Cor para erros
+        }
+    )
+    console = Console(theme=custom_theme)
+
+    directories = [input_dir, output_dir]
+    results = []
+    for directory in directories:
+        dir_path = Path(directory)
+        dir_name = dir_path.name
+        if not dir_path.exists():
+            try:
+                dir_path.mkdir(parents=True)
+                results.append((dir_name, "Created", "created"))
+            except OSError as e:
+                results.append((dir_name, f"Error: {e}", "error"))
+        else:
+            results.append((dir_name, "Folder Exists", "exists"))
+
+    # Cria uma tabela para exibir os resultados usando bordas ASCII
+    table = Table(
+        title="Directory Check Results",
+        box=box.ASCII,
+        show_header=True,
+        header_style="yellow3",
+    )
+    table.add_column("Status", justify="center", style="bold red")
+    table.add_column("Directory", justify="center")
+    table.add_column("Message", justify="center", style="bold red")
+
+    # Adiciona as linhas na tabela
+    for dir_name, status, style in results:
+        status_symbol = "+" if status == "Created" else "-"
+        table.add_row(
+            f"[{style}]{status_symbol}[/{style}]",
+            f"{dir_name}",  # Cor do nome da pasta permanece branca
+            f"[{style}]{status}[/{style}]",
+        )
+
+    # Adiciona uma linha em branco antes de imprimir a tabela
+    # console.print("\n")
+    # Exibe a tabela no console
+    console.print(table)
 
 
 def main():
@@ -1268,9 +1309,10 @@ def main():
     setup_logging()
     input_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\logs_test")
     output_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\output_json")
+    check_and_create_directories(input_dir, output_dir)
 
     # Cria o diretório de saída se não existir
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # output_dir.mkdir(parents=True, exist_ok=True)
 
     parser = Parser()  # Inicializar o objeto Parser aqui
     txt_files = list(input_dir.glob("*.txt"))
@@ -1280,5 +1322,6 @@ def main():
     process_files(parser, txt_files, output_dir)
 
 
+# Exemplo de uso isolado da função
 if __name__ == "__main__":
     main()
