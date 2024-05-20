@@ -11,11 +11,9 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
 # Imports de terceiros
-from colorama import Fore, Style
-from rich.console import Console
-from rich.table import Table, box
-from rich.theme import Theme
+from colorama import Fore, Style, init
 from tqdm import tqdm
+from utils import check_and_create_directories, process_files
 
 
 def resolv_power_type(pt):
@@ -1223,6 +1221,9 @@ def process_single_file(args):
         logging.error("Erro ao processar %s: %s", file_path, e)
 
 
+init(autoreset=True)  # Inicializa o Colorama para resetar cores automaticamente
+
+
 def process_files(parser, txt_files, output_dir, max_workers=None):
     """Processa múltiplos arquivos em paralelo.
 
@@ -1243,63 +1244,12 @@ def process_files(parser, txt_files, output_dir, max_workers=None):
         for _ in tqdm(
             pool.imap_unordered(process_single_file, args),
             total=len(txt_files),
-            desc=f"{Fore.GREEN}Converting files{Style.RESET_ALL}",
+            desc=f"{Fore.GREEN}🔄 Converting files...{Style.RESET_ALL}",
             bar_format="{l_bar}%s{bar}%s{r_bar}"
-            % (Fore.LIGHTGREEN_EX, Style.RESET_ALL),  # Cor da barra
-            colour=None,  # Desativa a coloração automática do `tqdm`
+            % (Fore.LIGHTGREEN_EX, Style.RESET_ALL),
+            colour=None,
         ):
             pass
-
-
-def check_and_create_directories(input_dir, output_dir):
-    # Inicializa o console do Rich com um tema personalizado
-    custom_theme = Theme(
-        {
-            "created": "bold yellow",  # Cor para pastas criadas
-            "exists": "bold green",  # Cor para pastas que existem
-            "error": "bold red",  # Cor para erros
-        }
-    )
-    console = Console(theme=custom_theme)
-
-    directories = [input_dir, output_dir]
-    results = []
-    for directory in directories:
-        dir_path = Path(directory)
-        dir_name = dir_path.name
-        if not dir_path.exists():
-            try:
-                dir_path.mkdir(parents=True)
-                results.append((dir_name, "Created", "created"))
-            except OSError as e:
-                results.append((dir_name, f"Error: {e}", "error"))
-        else:
-            results.append((dir_name, "Folder Exists", "exists"))
-
-    # Cria uma tabela para exibir os resultados usando bordas ASCII
-    table = Table(
-        title="Directory Check Results",
-        box=box.ASCII,
-        show_header=True,
-        header_style="yellow3",
-    )
-    table.add_column("Status", justify="center", style="bold red")
-    table.add_column("Directory", justify="center")
-    table.add_column("Message", justify="center", style="bold red")
-
-    # Adiciona as linhas na tabela
-    for dir_name, status, style in results:
-        status_symbol = "+" if status == "Created" else "-"
-        table.add_row(
-            f"[{style}]{status_symbol}[/{style}]",
-            f"{dir_name}",  # Cor do nome da pasta permanece branca
-            f"[{style}]{status}[/{style}]",
-        )
-
-    # Adiciona uma linha em branco antes de imprimir a tabela
-    # console.print("\n")
-    # Exibe a tabela no console
-    console.print(table)
 
 
 def main():
@@ -1311,9 +1261,6 @@ def main():
     output_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\output_json")
     check_and_create_directories(input_dir, output_dir)
 
-    # Cria o diretório de saída se não existir
-    # output_dir.mkdir(parents=True, exist_ok=True)
-
     parser = Parser()  # Inicializar o objeto Parser aqui
     txt_files = list(input_dir.glob("*.txt"))
     total_files = len(txt_files)
@@ -1322,6 +1269,5 @@ def main():
     process_files(parser, txt_files, output_dir)
 
 
-# Exemplo de uso isolado da função
 if __name__ == "__main__":
     main()
