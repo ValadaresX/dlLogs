@@ -13,7 +13,7 @@ from pathlib import Path
 # Imports de terceiros
 from colorama import Fore, Style, init
 from tqdm import tqdm
-from utils import check_and_create_directories, process_files
+from utils import check_and_create_directories
 
 
 def resolv_power_type(pt):
@@ -1201,6 +1201,10 @@ def process_single_file(args):
     parser, file_path, output_dir = args
     setup_logging()  # Certifique-se de configurar o logging em cada processo filho
     output_file_path = output_dir / f"{file_path.stem}.json"
+
+    # Verificar se o arquivo já foi convertido (sem log)
+    if output_file_path.exists():
+        return  # Pula para o próximo arquivo
     try:
         data_generator = parser.read_file(str(file_path))
         first_item = next(data_generator, None)
@@ -1257,7 +1261,7 @@ def main():
     configuração de logging e processamento dos arquivos de entrada.
     """
     setup_logging()
-    input_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\logs_test")
+    input_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\logs")
     output_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\output_json")
     check_and_create_directories(input_dir, output_dir)
 
