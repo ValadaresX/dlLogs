@@ -6,14 +6,19 @@ import json
 import logging
 import os
 import re
+
+# import sys
 import time
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
 # Imports de terceiros
-from colorama import Fore, Style, init
+from colorama import Fore, Style
+from rich import box
+from rich.console import Console
+from rich.table import Table
+from rich.theme import Theme
 from tqdm import tqdm
-from utils import check_and_create_directories
 
 
 def resolv_power_type(pt):
@@ -1225,9 +1230,6 @@ def process_single_file(args):
         logging.error("Erro ao processar %s: %s", file_path, e)
 
 
-init(autoreset=True)  # Inicializa o Colorama para resetar cores automaticamente
-
-
 def process_files(parser, txt_files, output_dir, max_workers=None):
     """Processa múltiplos arquivos em paralelo.
 
@@ -1248,12 +1250,66 @@ def process_files(parser, txt_files, output_dir, max_workers=None):
         for _ in tqdm(
             pool.imap_unordered(process_single_file, args),
             total=len(txt_files),
-            desc=f"{Fore.GREEN}🔄 Converting files...{Style.RESET_ALL}",
+            desc=f"{Fore.GREEN}{ICON_CONVERTING}...{Style.RESET_ALL}",
             bar_format="{l_bar}%s{bar}%s{r_bar}"
             % (Fore.LIGHTGREEN_EX, Style.RESET_ALL),
             colour=None,
         ):
             pass
+
+
+# Define os ícones como texto simples
+ICON_CHECK = "[OK]"
+ICON_CREATE = "[CREATE]"
+ICON_CONVERTING = "[CONVERTING]"
+ICON_SUCCESS = "[SUCCESS]"
+ICON_TIME = "[TIME]"
+ICON_SPEED = "[SPEED]"
+
+
+def check_and_create_directories(input_dir, output_dir):
+    custom_theme = Theme(
+        {
+            "created": "bold yellow",
+            "exists": "bold green",
+            "error": "bold red",
+        }
+    )
+    console = Console(theme=custom_theme)
+
+    directories = [input_dir, output_dir]
+    results = []
+    for directory in directories:
+        dir_path = Path(directory)
+        dir_name = dir_path.name
+        if not dir_path.exists():
+            try:
+                dir_path.mkdir(parents=True)
+                results.append((dir_name, "Created", "created"))
+            except OSError as e:
+                results.append((dir_name, f"Error: {e}", "error"))
+        else:
+            results.append((dir_name, "Folder Exists", "exists"))
+
+    table = Table(
+        title="Directory Check Results",
+        box=box.ASCII,
+        show_header=True,
+        header_style="yellow3",
+    )
+    table.add_column("Status", justify="center", style="bold red")
+    table.add_column("Directory", justify="center")
+    table.add_column("Message", justify="center", style="bold red")
+
+    for dir_name, status, style in results:
+        status_symbol = ICON_CHECK if status == "Folder Exists" else ICON_CREATE
+        table.add_row(
+            f"[{style}]{status_symbol}[/{style}]",
+            f"{dir_name}",
+            f"[{style}]{status}[/{style}]",
+        )
+
+    console.print(table)
 
 
 def main():
