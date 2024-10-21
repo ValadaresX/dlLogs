@@ -502,6 +502,7 @@ class Parser:
         return obj
 
     def parse_cols(self, ts, cols):
+
         logging.debug(f"Processing columns: {cols}")
         event = cols[0]
         if event in ("WORLD_MARKER_PLACED", "WORLD_MARKER_REMOVED"):
@@ -613,30 +614,42 @@ class Parser:
         return obj
 
     def read_file(self, fname):
+        """
+        Lê o arquivo de log e gera objetos JSON a partir de cada linha válida.
+
+        Args:
+            fname (str): Caminho para o arquivo de log.
+
+        Yields:
+            dict: Objeto JSON representando a linha do log.
+        """
         if not os.path.exists(fname):
-            logging.error("File not found: %s", fname)
+            logging.error("Arquivo não encontrado: %s", fname)
             return
 
         try:
             with open(fname, "r", encoding="utf-8", buffering=8192) as file:
-                first_line = file.readline()
-                if not first_line or first_line.isspace() or "\x00" in first_line:
-                    logging.warning("Corrupted file: %s", fname)
-                    return
-                if "ARENA_MATCH_START" not in first_line:
-                    logging.warning("Invalid file format: %s", fname)
-                    return
-                yield self.parse_line(first_line)
-                for line in file:
-                    if line.strip():
-                        try:
-                            yield self.parse_line(line)
-                        except ValueError as e:
-                            logging.error("Error parsing line in file %s: %s", fname, e)
-                            logging.error("Line with error: %s", line)
-                            return
+                for line_num, line in enumerate(file, 1):
+                    line = line.strip()
+                    if not line or "\x00" in line:
+                        logging.warning(
+                            "Linha corrompida no arquivo %s: Linha %d", fname, line_num
+                        )
+                        continue
+                    if "ARENA_MATCH_START" not in line and line_num == 1:
+                        logging.warning("Formato inválido do arquivo: %s", fname)
+                        continue
+                    try:
+                        yield self.parse_line(line)
+                    except ValueError as e:
+                        logging.error(
+                            "Erro ao analisar a linha %s no arquivo %s: %s",
+                            line_num,
+                            fname,
+                            e,
+                        )
         except IOError as e:
-            logging.error("Error reading file: %s", e)
+            logging.error("Erro ao ler o arquivo %s: %s", fname, e)
 
     def extract_spec_info(self, spec_id):
         data = [
