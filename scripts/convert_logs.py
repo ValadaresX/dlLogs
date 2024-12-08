@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import pstats
-import re
 import time
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
@@ -84,38 +83,34 @@ def parse_unit_flag(flag):
     if f == 0:
         return []
 
-    res = []
-    flag_map = {
-        0x00000001: "AFFILIATION_MINE",
-        0x00000002: "AFFILIATION_PARTY",
-        0x00000004: "AFFILIATION_RAID",
-        0x00000008: "AFFILIATION_OUTSIDER",
-        0x0000000F: "AFFILIATION_MASK",
-        0x00000010: "REACTION_FRIENDLY",
-        0x00000020: "REACTION_NEUTRAL",
-        0x00000040: "REACTION_HOSTILE",
-        0x000000F0: "REACTION_MASK",
-        0x00000100: "CONTROL_PLAYER",
-        0x00000200: "CONTROL_NPC",
-        0x00000300: "CONTROL_MASK",
-        0x00000400: "TYPE_PLAYER",
-        0x00000800: "TYPE_NPC",
-        0x00001000: "TYPE_PET",
-        0x00002000: "TYPE_GUARDIAN",
-        0x00004000: "TYPE_OBJECT",
-        0x0000FC00: "TYPE_MASK",
-        0x00010000: "TARGET",
-        0x00020000: "FOCUS",
-        0x00040000: "MAINTANK",
-        0x00080000: "MAINASSIST",
-        0x00800000: "NONE",  # Whether the unit does not exist.
-        0x0FF00000: "SPECIAL_MASK",
-    }
+    flag_map = [
+        (0x00000001, "AFFILIATION_MINE"),
+        (0x00000002, "AFFILIATION_PARTY"),
+        (0x00000004, "AFFILIATION_RAID"),
+        (0x00000008, "AFFILIATION_OUTSIDER"),
+        (0x0000000F, "AFFILIATION_MASK"),
+        (0x00000010, "REACTION_FRIENDLY"),
+        (0x00000020, "REACTION_NEUTRAL"),
+        (0x00000040, "REACTION_HOSTILE"),
+        (0x000000F0, "REACTION_MASK"),
+        (0x00000100, "CONTROL_PLAYER"),
+        (0x00000200, "CONTROL_NPC"),
+        (0x00000300, "CONTROL_MASK"),
+        (0x00000400, "TYPE_PLAYER"),
+        (0x00000800, "TYPE_NPC"),
+        (0x00001000, "TYPE_PET"),
+        (0x00002000, "TYPE_GUARDIAN"),
+        (0x00004000, "TYPE_OBJECT"),
+        (0x0000FC00, "TYPE_MASK"),
+        (0x00010000, "TARGET"),
+        (0x00020000, "FOCUS"),
+        (0x00040000, "MAINTANK"),
+        (0x00080000, "MAINASSIST"),
+        (0x00800000, "NONE"),
+        (0x0FF00000, "SPECIAL_MASK"),
+    ]
 
-    for k, v in flag_map.items():
-        if f & k:
-            res.append(v)
-    return res
+    return [v for k, v in flag_map if f & k]
 
 
 def parse_school_flag(school):
@@ -478,35 +473,79 @@ class Parser:
             "ARENA_MATCH_END": ArenaMatchEndParser(),
         }
 
-    def parse_line(self, line):
+    def parse_line(self, line: str) -> dict:
+        """
+        Parse a combat log line into a structured object.
 
-        logging.debug(f"Processing line: {line}")
+        Args:
+            line (str): A line of text representing a combat log event.
+
+        Returns:
+            dict: A dictionary containing the structured event data.
+
+        Raises:
+            Exception: If the line format is invalid or
+            if an error occurs during processing.
+        """
+
+        # Replace special string to avoid splitting issues
         line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
-        line = re.sub(r"\(([\d,@]+)\)", lambda m: m.group().replace(",", "@"), line)
-        terms = line.split(" ")
+
+        # Split into fixed parts and CSV
+        terms = line.split(" ", 3)
         if len(terms) < 4:
             raise Exception(f"Invalid format: {line}")
 
+        # Parse date parts
         month, day = map(int, terms[0].split("/"))
         year = datetime.datetime.today().year
-        s = f"{year:02d}/{month:02d}/{day:02d} {terms[1][:-4]}"
-        d = datetime.datetime.strptime(s, "%Y/%m/%d %H:%M:%S")
-        ts = time.mktime(d.timetuple()) + float(terms[1][-4:])
 
-        csv_txt = " ".join(terms[3:]).strip()
-        csv_file = io.StringIO(csv_txt)
+        # Extrair time_str e seconds
+        time_str = terms[1][:-4]
+        seconds = float(terms[1][-4:])
+
+        # Create timestamp
+        date_str = f"{year}/{month:02d}/{day:02d} {time_str}"
+        date_obj = datetime.datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S")
+        timestamp = time.mktime(date_obj.timetuple()) + seconds
+
+        # Process CSV
+        csv_text = terms[3].strip()
+        csv_file = io.StringIO(csv_text)
         reader = csv.reader(csv_file, delimiter=",")
-        cols = next(reader)
-        obj = self.parse_cols(ts, cols)
+        columns = next(reader)
 
-        return obj
+        event = self.parse_cols(timestamp, columns)
 
-    def parse_cols(self, ts, cols):
+        return event
 
-        logging.debug(f"Processing columns: {cols}")
+    def parse_cols(self, ts: float, cols: list) -> dict:
+        """
+        Analyze the columns extracted from a line of event and convert them into a
+        detailed object.
+        This method receives the timestamp of the event and a list of columns
+        extracted from the CSV, identifies the type of event and applies the
+        appropriate parser to obtain the details of the event. It handles
+        specific events, such as combat, arenas and encounters, and
+        deals with prefixes and suffixes to analyze complex events.
+
+        Args:
+            ts (float): Timestamp of the event in seconds since the epoch.
+            cols (list): List of strings representing the columns of the event,
+            extracted from the CSV.
+
+        Returns:
+            dict: A dictionary containing the structured event data,
+            including information about the participants, type of event and
+            specific data of the event.
+
+        Raises:
+            ValueError: If an error occurs while analyzing the event data or
+            if the format of the columns is unexpected.
+        """
+
         event = cols[0]
         if event in ("WORLD_MARKER_PLACED", "WORLD_MARKER_REMOVED"):
-            logging.debug(f"Ignoring event: {event}")
             return {}
 
         obj = {"timestamp": ts, "event": event}
@@ -526,19 +565,13 @@ class Parser:
                 return obj
 
             if len(cols) < 9:
-                logging.error(
-                    "Invalid format for event %s: insufficient columns (%s < 9)",
-                    event,
-                    len(cols),
+                raise ValueError(
+                    "Invalid format for event %s: insufficient columns (%s < 9)"
+                    % (event, len(cols))
                 )
-                return {}
 
-            try:
-                source_flags = parse_unit_flag(cols[3])
-                source_raid_flags = parse_unit_flag(cols[4])
-            except ValueError as e:
-                logging.error("Error parsing unit flags: %s", e)
-                return {}
+            source_flags = parse_unit_flag(cols[3])
+            source_raid_flags = parse_unit_flag(cols[4])
 
             obj.update(
                 {
@@ -555,11 +588,7 @@ class Parser:
 
             suffix_parser = self.ev_suffix.get(event)
             if suffix_parser:
-                try:
-                    obj.update(suffix_parser.parse(cols[9:]))
-                except ValueError as e:
-                    logging.error("Error parsing event suffix: %s", e)
-                    return {}
+                obj.update(suffix_parser.parse(cols[9:]))
                 return obj
 
             prefix_map = {
@@ -576,80 +605,54 @@ class Parser:
                 suffix = event[len(prefix) :]
                 suffix_parser = self.ev_suffix.get(suffix)
                 if suffix_parser:
-                    try:
-                        result, remaining = prefix_map[prefix].parse(cols[9:])
-                        obj.update(result)
-                        suffix_parser.raw = cols
-                        obj.update(suffix_parser.parse(remaining))
-                    except ValueError as e:
-                        logging.error("Error parsing event prefix or suffix: %s", e)
-                        return {}
+                    result, remaining = prefix_map[prefix].parse(cols[9:])
+                    obj.update(result)
+                    suffix_parser.raw = cols
+                    obj.update(suffix_parser.parse(remaining))
                 else:
-                    logging.error("Unknown event suffix: %s", suffix)
-                    return {}
+                    raise ValueError("Unknown event suffix: %s" % suffix)
             else:
                 parser_tuple = self.sp_event.get(event)
                 if parser_tuple:
-                    try:
-                        prefix_parser, suffix_parser = parser_tuple
-                        result, remaining = prefix_parser.parse(cols[9:])
-                        obj.update(result)
-                        obj.update(suffix_parser.parse(remaining))
-                    except ValueError as e:
-                        logging.error("Error parsing special event: %s", e)
-                        return {}
+                    prefix_parser, suffix_parser = parser_tuple
+                    result, remaining = prefix_parser.parse(cols[9:])
+                    obj.update(result)
+                    obj.update(suffix_parser.parse(remaining))
                 else:
-                    logging.error("Unknown event format: %s", event)
-                    return {}
+                    raise ValueError("Unknown event format: %s" % event)
 
         except ValueError as e:
-            logging.error(
-                "Error parsing event: %s\nLine: %s\nError: %s",
-                event,
-                ",".join(cols),
-                e,
-            )
-            return {}
+            raise ValueError(
+                "Error parsing event: %s\nLine: %s\nError: %s"
+                % (event, ",".join(cols), e)
+            ) from e
 
         return obj
 
     def read_file(self, fname):
-        """
-        Lê o arquivo de log e gera objetos JSON a partir de cada linha válida.
-
-        Args:
-            fname (str): Caminho para o arquivo de log.
-
-        Yields:
-            dict: Objeto JSON representando a linha do log.
-        """
         if not os.path.exists(fname):
-            logging.error("Arquivo não encontrado: %s", fname)
+            logging.error("File not found: %s", fname)
             return
-
         try:
             with open(fname, "r", encoding="utf-8", buffering=8192) as file:
-                for line_num, line in enumerate(file, 1):
-                    line = line.strip()
-                    if not line or "\x00" in line:
-                        logging.warning(
-                            "Linha corrompida no arquivo %s: Linha %d", fname, line_num
-                        )
-                        continue
-                    if "ARENA_MATCH_START" not in line and line_num == 1:
-                        logging.warning("Formato inválido do arquivo: %s", fname)
-                        continue
-                    try:
-                        yield self.parse_line(line)
-                    except ValueError as e:
-                        logging.error(
-                            "Erro ao analisar a linha %s no arquivo %s: %s",
-                            line_num,
-                            fname,
-                            e,
-                        )
+                first_line = file.readline()
+                if not first_line or first_line.isspace() or "\x00" in first_line:
+                    logging.warning("Corrupted file: %s", fname)
+                    return
+                if "ARENA_MATCH_START" not in first_line:
+                    logging.warning("Invalid file format: %s", fname)
+                    return
+                yield self.parse_line(first_line)
+                for line in file:
+                    if line.strip():
+                        try:
+                            yield self.parse_line(line)
+                        except ValueError as e:
+                            logging.error("Error parsing line in file %s: %s", fname, e)
+                            logging.error("Line with error: %s", line)
+                            return
         except IOError as e:
-            logging.error("Erro ao ler o arquivo %s: %s", fname, e)
+            logging.error("Error reading file: %s", e)
 
     def extract_spec_info(self, spec_id):
         data = [
@@ -846,24 +849,54 @@ class Parser:
         return pvp_talents_info
 
     def extract_equipped_items(self, cols):
+        """
+        Extrai e reconstrói itens equipados a partir de dados brutos de coluna.
+
+        Esse método processa uma lista de dados brutos de itens equipados, reconstruindo
+        reconstruindo-a em dicionários estruturados para cada item. Ele lida com
+        partes do item entre parênteses e garante que elas estejam corretamente
+        balanceadas e formatados antes de extrair os detalhes relevantes.
+
+        Args:
+            cols (lista): Lista de cadeias de caracteres que representam as colunas do
+            evento, extraídas do CSV.
+
+        Retorna:
+            list: Uma lista de dicionários, cada um representando um item equipado
+                com as chaves 'item_id', 'item_level', 'enchantments', 'bonus_list',
+                e 'gems'.
+
+        Aumenta:
+            ValueError: Se os parênteses nos dados brutos estiverem desequilibrados.
+        """
+
         equipped_items_raw = self.process_cols(cols, "equipped_items")
         reconstructed_dicts = []
-        temp_item = ""
+        temp_item_parts = []  # Utilizar lista para acumular partes do item
         parenthesis_count = 0
+        n = len(equipped_items_raw)
 
         for i, item_part in enumerate(equipped_items_raw):
-            temp_item += item_part
-            if i < len(equipped_items_raw) - 1:
-                if not (
-                    item_part.endswith(")")
-                    and equipped_items_raw[i + 1].startswith("(")
-                ) or (item_part == "()" and equipped_items_raw[i + 1] == "()"):
-                    temp_item += ","
-            parenthesis_count += item_part.count("(")
-            parenthesis_count -= item_part.count(")")
-            if parenthesis_count == 0 and temp_item:
+            temp_item_parts.append(item_part)
+            # Atualizar o contador de parênteses
+            parenthesis_count += item_part.count("(") - item_part.count(")")
+
+            # Verificar se deve adicionar uma vírgula
+            if i < n - 1:
+                next_part = equipped_items_raw[i + 1]
+                if not (item_part.endswith(")") and next_part.startswith("(")) or (
+                    item_part == "()" and next_part == "()"
+                ):
+                    temp_item_parts.append(",")
+
+            # Quando os parênteses estiverem balanceados, processar o item
+            if parenthesis_count == 0 and temp_item_parts:
+                temp_item = "".join(temp_item_parts)
+                # Substituições específicas para garantir o formato correto
                 temp_item = temp_item.replace("()()", "(),()").replace(")(", "),(")
                 parts = temp_item.strip("()").split(",")
+
+                # Construir o dicionário do item de forma mais eficiente
                 item_dict = {
                     "item_id": int(parts[0]),
                     "item_level": int(parts[1]),
@@ -876,10 +909,12 @@ class Parser:
                     "gems": [int(x) for x in parts[4].strip("()").split(",") if x],
                 }
                 reconstructed_dicts.append(item_dict)
-                temp_item = ""
+                # Resetar as partes temporárias para o próximo item
+                temp_item_parts = []
 
+        # Verificar se os parênteses estão balanceados
         if parenthesis_count != 0:
-            raise ValueError("Unbalanced parentheses in input")
+            raise ValueError("Parênteses desbalanceados na entrada")
 
         return reconstructed_dicts
 
@@ -915,6 +950,7 @@ class Parser:
         return pvp_stats_dict
 
     def parse_combatant_info(self, ts, cols):
+
         info = {
             "timestamp": ts,
             "event": "COMBATANT_INFO",
@@ -950,6 +986,7 @@ class Parser:
             "interestingAuras": self.extract_interesting_auras(cols),
             "pvpStats": self.extract_pvp_stats(cols),
         }
+
         return info
 
 
@@ -1025,19 +1062,18 @@ def check_and_create_directories(input_dir, output_dir):
     )
     console = Console(theme=custom_theme)
 
-    directories = [input_dir, output_dir]
     results = []
-    for directory in directories:
+    for directory in [input_dir, output_dir]:
         dir_path = Path(directory)
         dir_name = dir_path.name
-        if not dir_path.exists():
+        if dir_path.exists():
+            results.append((dir_name, "Folder Exists", "exists"))
+        else:
             try:
                 dir_path.mkdir(parents=True)
                 results.append((dir_name, "Created", "created"))
             except OSError as e:
                 results.append((dir_name, f"Error: {e}", "error"))
-        else:
-            results.append((dir_name, "Folder Exists", "exists"))
 
     table = Table(
         title="Directory Check Results",
@@ -1050,7 +1086,7 @@ def check_and_create_directories(input_dir, output_dir):
     table.add_column("Message", justify="center", style="bold red")
 
     for dir_name, status, style in results:
-        status_symbol = ICON_CHECK if status == "Folder Exists" else ICON_CREATE
+        status_symbol = ICON_CREATE if status != "Folder Exists" else ICON_CHECK
         table.add_row(
             f"[{style}]{status_symbol}[/{style}]",
             f"{dir_name}",
@@ -1062,7 +1098,7 @@ def check_and_create_directories(input_dir, output_dir):
 
 def run_verification_test(parser, test_input_file, expected_output_file):
     console = Console()
-    console.print(f"Running verification test on {test_input_file.name}...")
+    console.print(f"Execução do teste de verificação em {test_input_file.name}...")
 
     # Inicializa o profiler
     profiler = cProfile.Profile()
@@ -1084,17 +1120,19 @@ def run_verification_test(parser, test_input_file, expected_output_file):
     expected_output_path = Path(expected_output_file)
     if not expected_output_path.exists():
         console.print(
-            f"[red]Expected output file not found: {expected_output_file}[/red]"
+            f"[red]O arquivo de saída esperado não foi encontrado: {expected_output_file}[/red]"
         )
         return False, duration
     with open(expected_output_file, "r", encoding="utf-8") as f:
         data_expected = json.load(f)
     if data_generated == data_expected:
-        console.print(f"[green]{ICON_SUCCESS} Verification test passed![/green]")
-        console.print(f"Time taken: {duration:.2f} segundos.")
+        console.print(
+            f"[green]{ICON_SUCCESS} O teste de verificação foi aprovado![/green]"
+        )
+        console.print(f"Tempo gasto: {duration:.2f} segundos.")
         return True, duration
     else:
-        console.print(f"[red]{ICON_SUCCESS} Verification test failed![/red]")
+        console.print(f"[red]{ICON_SUCCESS} O teste de verificação falhou![/red]")
         console.print(f"Time taken: {duration:.2f} segundos.")
         return False, duration
 
@@ -1104,33 +1142,31 @@ def main():
     configuração de logging e processamento dos arquivos de entrada.
     """
     setup_logging()
-    input_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\logs")
+    input_dir = Path(r"E:\LogsWOW\logs")
     output_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\output_json")
     check_and_create_directories(input_dir, output_dir)
 
     parser = Parser()
     txt_files = list(input_dir.glob("*.txt"))
     total_files = len(txt_files)
-    logging.debug("Starting processing of %s files.", total_files)
+    logging.debug("niciando o processamento de %s arquivos.", total_files)
 
     # Define test files
     test_input_file = input_dir / "0026580d3a9a5e6909e407211cbe51e2.txt"
     expected_output_file = output_dir / "0026580d3a9a5e6909e407211cbe51e2.json"
 
     # Run verification test
-    test_passed, test_duration = run_verification_test(
-        parser, test_input_file, expected_output_file
-    )
+    test_passed = run_verification_test(parser, test_input_file, expected_output_file)
     if not test_passed:
-        logging.error("Verification test failed. Exiting.")
+        logging.error("Falha no teste de verificação. Saindo.")
         return
 
     # Ask user to continue
     console = Console()
-    console.print("Do you want to continue processing the current directory? (Y/N)")
+    console.print("Deseja continuar processando o diretório atual? (S/N)")
     choice = input().strip().upper()
-    if choice != "Y":
-        console.print("Exiting...")
+    if choice != "S":
+        console.print("Saindo...")
         return
 
     process_files(parser, txt_files, output_dir)
