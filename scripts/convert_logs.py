@@ -25,6 +25,73 @@ ICON_SUCCESS = "[SUCCESS]"
 ICON_TIME = "[TIME]"
 ICON_SPEED = "[SPEED]"
 
+# Pré-computa o mapeamento de flags para parse_unit_flag
+_UNIT_FLAG_MAP = {
+    0x00000001: "AFFILIATION_MINE",
+    0x00000002: "AFFILIATION_PARTY",
+    0x00000004: "AFFILIATION_RAID",
+    0x00000008: "AFFILIATION_OUTSIDER",
+    0x0000000F: "AFFILIATION_MASK",
+    0x00000010: "REACTION_FRIENDLY",
+    0x00000020: "REACTION_NEUTRAL",
+    0x00000040: "REACTION_HOSTILE",
+    0x000000F0: "REACTION_MASK",
+    0x00000100: "CONTROL_PLAYER",
+    0x00000200: "CONTROL_NPC",
+    0x00000300: "CONTROL_MASK",
+    0x00000400: "TYPE_PLAYER",
+    0x00000800: "TYPE_NPC",
+    0x00001000: "TYPE_PET",
+    0x00002000: "TYPE_GUARDIAN",
+    0x00004000: "TYPE_OBJECT",
+    0x0000FC00: "TYPE_MASK",
+    0x00010000: "TARGET",
+    0x00020000: "FOCUS",
+    0x00040000: "MAINTANK",
+    0x00080000: "MAINASSIST",
+    0x00800000: "NONE",
+    0xFF000000: "SPECIAL_MASK",
+}
+
+# Pré-computa o mapeamento de school flags
+_SCHOOL_FLAG_MAP = {
+    0x1: "Physical",
+    0x2: "Holy",
+    0x4: "Fire",
+    0x8: "Nature",
+    0x10: "Frost",
+    0x20: "Shadow",
+    0x40: "Arcane",
+}
+
+
+def parse_unit_flag(flag):
+    """
+    Parse unit flags used in the game.
+
+    Args:
+        flag (int or str): The unit flag.
+
+    Returns:
+        list: A list of flag descriptions.
+    """
+    f = int(flag, 0) if isinstance(flag, str) else flag
+    return [_UNIT_FLAG_MAP.get(k) for k in _UNIT_FLAG_MAP if f & k]
+
+
+def parse_school_flag(school):
+    """
+    Parse school flags used in the game.
+
+    Args:
+        school (int or str): The school flag.
+
+    Returns:
+        list: A list of school names.
+    """
+    s = int(school, 0) if isinstance(school, str) else school
+    return [_SCHOOL_FLAG_MAP.get(k) for k in _SCHOOL_FLAG_MAP if s & k]
+
 
 def resolv_power_type(pt):
     """
@@ -67,75 +134,6 @@ def resolv_power_type(pt):
         26: "num power types",
     }
     return pt_map.get(pt)
-
-
-def parse_unit_flag(flag):
-    """
-    Parse unit flags used in the game.
-
-    Args:
-        flag (int or str): The unit flag.
-
-    Returns:
-        list: A list of flag descriptions.
-    """
-    f = int(flag, 0) if isinstance(flag, str) else flag
-    if f == 0:
-        return []
-
-    flag_map = [
-        (0x00000001, "AFFILIATION_MINE"),
-        (0x00000002, "AFFILIATION_PARTY"),
-        (0x00000004, "AFFILIATION_RAID"),
-        (0x00000008, "AFFILIATION_OUTSIDER"),
-        (0x0000000F, "AFFILIATION_MASK"),
-        (0x00000010, "REACTION_FRIENDLY"),
-        (0x00000020, "REACTION_NEUTRAL"),
-        (0x00000040, "REACTION_HOSTILE"),
-        (0x000000F0, "REACTION_MASK"),
-        (0x00000100, "CONTROL_PLAYER"),
-        (0x00000200, "CONTROL_NPC"),
-        (0x00000300, "CONTROL_MASK"),
-        (0x00000400, "TYPE_PLAYER"),
-        (0x00000800, "TYPE_NPC"),
-        (0x00001000, "TYPE_PET"),
-        (0x00002000, "TYPE_GUARDIAN"),
-        (0x00004000, "TYPE_OBJECT"),
-        (0x0000FC00, "TYPE_MASK"),
-        (0x00010000, "TARGET"),
-        (0x00020000, "FOCUS"),
-        (0x00040000, "MAINTANK"),
-        (0x00080000, "MAINASSIST"),
-        (0x00800000, "NONE"),
-        (0x0FF00000, "SPECIAL_MASK"),
-    ]
-
-    return [v for k, v in flag_map if f & k]
-
-
-def parse_school_flag(school):
-    """
-    Parse school flags used in the game.
-
-    Args:
-        school (int or str): The school flag.
-
-    Returns:
-        list: A list of school names.
-    """
-    s = int(school, 0) if isinstance(school, str) else school
-
-    school_map = {
-        0x1: "Physical",
-        0x2: "Holy",
-        0x4: "Fire",
-        0x8: "Nature",
-        0x10: "Frost",
-        0x20: "Shadow",
-        0x40: "Arcane",
-    }
-
-    return [v for k, v in school_map.items() if s & k]
 
 
 class SpellParser:
@@ -349,12 +347,27 @@ class VoidParser:
 
 class ArenaMatchStartParser:
     def parse(self, cols):
-        return {
-            "instanceID": cols[0],
-            "unk": cols[1],
-            "matchType": cols[2],
-            "teamId": cols[3],
-        }
+        """
+        Processa os dados do evento ARENA_MATCH_START.
+
+        Args:
+            cols: Lista de colunas do evento
+
+        Returns:
+            dict: Dicionário com os dados processados
+        """
+        try:
+            return {
+                "instance_id": int(cols[0]),  # Convertendo para int e usando snake_case
+                "match_type": cols[2],  # Pulando cols[1] que é 'unk'
+                "team_id": int(cols[3]),  # Convertendo para int e usando snake_case
+            }
+        except (IndexError, ValueError) as e:
+            return {
+                "event": "ARENA_MATCH_START",
+                "error": f"Erro ao processar linha: {str(e)}",
+                "raw_data": cols,
+            }
 
 
 class ArenaMatchEndParser:
@@ -481,67 +494,73 @@ class Parser:
             line (str): A line of text representing a combat log event.
 
         Returns:
-            dict: A dictionary containing the structured event data.
-
-        Raises:
-            Exception: If the line format is invalid or
-            if an error occurs during processing.
+            dict: A dictionary containing the structured event data or error information.
         """
+        try:
+            # Replace special string to avoid splitting issues
+            line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
 
-        # Replace special string to avoid splitting issues
-        line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
+            # Split into fixed parts and CSV
+            terms = line.split(" ", 3)
+            if len(terms) < 4:
+                return {
+                    "event": line.split(",")[
+                        0
+                    ],  # Pega o tipo do evento da linha inválida
+                    "error": f"Formato inválido: {line}",
+                    "raw_data": line,
+                }
 
-        # Split into fixed parts and CSV
-        terms = line.split(" ", 3)
-        if len(terms) < 4:
-            raise Exception(f"Invalid format: {line}")
+            # Parse date parts
+            month, day = map(int, terms[0].split("/"))
+            year = datetime.datetime.today().year
 
-        # Parse date parts
-        month, day = map(int, terms[0].split("/"))
-        year = datetime.datetime.today().year
+            # Extrair time_str e seconds
+            time_str = terms[1][:-4]
+            seconds = float(terms[1][-4:])
 
-        # Extrair time_str e seconds
-        time_str = terms[1][:-4]
-        seconds = float(terms[1][-4:])
+            # Create timestamp
+            date_str = f"{year}/{month:02d}/{day:02d} {time_str}"
+            date_obj = datetime.datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S")
+            timestamp = time.mktime(date_obj.timetuple()) + seconds
 
-        # Create timestamp
-        date_str = f"{year}/{month:02d}/{day:02d} {time_str}"
-        date_obj = datetime.datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S")
-        timestamp = time.mktime(date_obj.timetuple()) + seconds
+            # Process CSV
+            csv_text = terms[3].strip()
+            csv_file = io.StringIO(csv_text)
+            reader = csv.reader(csv_file, delimiter=",")
+            columns = next(reader)
 
-        # Process CSV
-        csv_text = terms[3].strip()
-        csv_file = io.StringIO(csv_text)
-        reader = csv.reader(csv_file, delimiter=",")
-        columns = next(reader)
+            return self.parse_cols(timestamp, columns)
 
-        event = self.parse_cols(timestamp, columns)
-
-        return event
+        except Exception as e:
+            # Se qualquer erro ocorrer durante o processamento,
+            # retorna um dicionário com informações do erro
+            event = line.split(",")[0] if "," in line else line
+            return {"event": event, "error": str(e), "raw_data": line}
 
     def parse_cols(self, ts: float, cols: list) -> dict:
         """
-        Analyze the columns extracted from a line of event and convert them into a
-        detailed object.
-        This method receives the timestamp of the event and a list of columns
-        extracted from the CSV, identifies the type of event and applies the
-        appropriate parser to obtain the details of the event. It handles
-        specific events, such as combat, arenas and encounters, and
-        deals with prefixes and suffixes to analyze complex events.
+        Analisa as colunas extraídas de uma linha de evento e as converte em um
+        objeto detalhado.
+        Este método recebe o timestamp do evento e uma lista de colunas
+        extraídas do CSV, identifica o tipo de evento e aplica o
+        parser apropriado para obter os detalhes do evento. Ele lida com
+        eventos específicos, como combate, arenas e encontros, e
+        lida com prefixos e sufixos para analisar eventos complexos.
 
         Args:
-            ts (float): Timestamp of the event in seconds since the epoch.
-            cols (list): List of strings representing the columns of the event,
-            extracted from the CSV.
+            ts (float): Timestamp do evento em segundos desde a época.
+            cols (list): Lista de strings representando as colunas do evento,
+            extraídas do CSV.
 
         Returns:
-            dict: A dictionary containing the structured event data,
-            including information about the participants, type of event and
-            specific data of the event.
+            dict: Um dicionário contendo os dados estruturados do evento,
+            incluindo informações sobre os participantes, tipo de evento e
+            dados específicos do evento.
 
         Raises:
-            ValueError: If an error occurs while analyzing the event data or
-            if the format of the columns is unexpected.
+            ValueError: Se ocorrer um erro ao analisar os dados do evento ou
+            se o formato das colunas for inesperado.
         """
 
         event = cols[0]
@@ -554,72 +573,13 @@ class Parser:
             if event == "COMBATANT_INFO":
                 return self.parse_combatant_info(ts, cols)
 
-            event_map = {
-                **self.enc_event,
-                **self.arena_event,
-                **self.combat_player_info,
-            }
-            if event in event_map:
-                parsed_data = event_map[event].parse(cols[1:])
-                obj.update(parsed_data)
+            obj = self._handle_special_events(ts, cols, obj)
+            if obj:
                 return obj
 
-            if len(cols) < 9:
-                raise ValueError(
-                    "Invalid format for event %s: insufficient columns (%s < 9)"
-                    % (event, len(cols))
-                )
+            obj = self._parse_base_parameters(cols, obj)
 
-            source_flags = parse_unit_flag(cols[3])
-            source_raid_flags = parse_unit_flag(cols[4])
-
-            obj.update(
-                {
-                    "sourceGUID": cols[1],
-                    "sourceName": cols[2],
-                    "sourceFlags": source_flags,
-                    "sourceRaidFlags": source_raid_flags,
-                    "destGUID": cols[5],
-                    "destName": cols[6],
-                    "destFlags": source_flags,
-                    "destRaidFlags": source_raid_flags,
-                }
-            )
-
-            suffix_parser = self.ev_suffix.get(event)
-            if suffix_parser:
-                obj.update(suffix_parser.parse(cols[9:]))
-                return obj
-
-            prefix_map = {
-                prefix: self.ev_prefix[prefix]
-                for prefix in sorted(self.ev_prefix, key=len, reverse=True)
-            }
-            for prefix in sorted(prefix_map, key=len, reverse=True):
-                if event.startswith(prefix):
-                    break
-            else:
-                prefix = None
-
-            if prefix:
-                suffix = event[len(prefix) :]
-                suffix_parser = self.ev_suffix.get(suffix)
-                if suffix_parser:
-                    result, remaining = prefix_map[prefix].parse(cols[9:])
-                    obj.update(result)
-                    suffix_parser.raw = cols
-                    obj.update(suffix_parser.parse(remaining))
-                else:
-                    raise ValueError("Unknown event suffix: %s" % suffix)
-            else:
-                parser_tuple = self.sp_event.get(event)
-                if parser_tuple:
-                    prefix_parser, suffix_parser = parser_tuple
-                    result, remaining = prefix_parser.parse(cols[9:])
-                    obj.update(result)
-                    obj.update(suffix_parser.parse(remaining))
-                else:
-                    raise ValueError("Unknown event format: %s" % event)
+            obj = self._handle_prefix_suffix_events(cols, obj)
 
         except ValueError as e:
             raise ValueError(
@@ -627,6 +587,140 @@ class Parser:
                 % (event, ",".join(cols), e)
             ) from e
 
+        return obj
+
+    def _handle_special_events(self, ts: float, cols: list, obj: dict) -> dict:
+        """
+        Lida com eventos especiais como COMBATANT_INFO, encontros e arenas.
+
+        Args:
+            ts (float): Timestamp do evento.
+            cols (list): Lista de colunas do evento.
+            obj (dict): Objeto base para o evento.
+
+        Returns:
+            dict: Objeto atualizado com os dados do evento especial,
+            ou o objeto original se o evento não for especial.
+        """
+        event = cols[0]
+        # Simplifica a lógica de mapeamento de eventos
+        if event == "COMBATANT_INFO":
+            obj.update(self.parse_combatant_info(ts, cols[1:]))
+        elif event in self.enc_event:
+            obj.update(self.enc_event[event].parse(cols[1:]))
+        elif event in self.arena_event:
+            obj.update(self.arena_event[event].parse(cols[1:]))
+        return obj
+
+    def _parse_base_parameters(self, cols: list, obj: dict) -> dict:
+        """
+        Analisa os parâmetros base de um evento (GUIDs, nomes, flags).
+
+        Args:
+            cols (list): Lista de colunas do evento.
+            obj (dict): Objeto base para o evento.
+
+        Returns:
+            dict: Objeto atualizado com os parâmetros base.
+        """
+        # Adiciona uma verificação mais robusta para o comprimento das colunas
+        if len(cols) < 9:
+            raise ValueError(
+                f"Formato inválido para o evento {cols[0]}: "
+                f"número insuficiente de colunas ({len(cols)} < 9)"
+            )
+
+        # Simplifica a extração de flags
+        obj.update(
+            {
+                "sourceGUID": cols[1],
+                "sourceName": cols[2],
+                "sourceFlags": parse_unit_flag(cols[3]),
+                "sourceRaidFlags": parse_unit_flag(cols[4]),
+                "destGUID": cols[5],
+                "destName": cols[6],
+                "destFlags": parse_unit_flag(cols[7]),
+                "destRaidFlags": parse_unit_flag(cols[8]),
+            }
+        )
+        return obj
+
+    def _handle_prefix_suffix_events(self, cols: list, obj: dict) -> dict:
+        """
+        Lida com eventos que possuem prefixos e sufixos.
+
+        Args:
+            cols (list): Lista de colunas do evento.
+            obj (dict): Objeto base para o evento.
+
+        Returns:
+            dict: Objeto atualizado com os dados do evento prefixado/sufixado.
+        """
+        event = cols[0]
+
+        # Tenta encontrar um sufixo primeiro
+        suffix_parser = self.ev_suffix.get(event)
+        if suffix_parser:
+            obj.update(suffix_parser.parse(cols[9:]))
+            return obj
+
+        # Se não houver sufixo, procura por um prefixo
+        prefix = self._find_prefix(event)
+        if prefix:
+            return self._parse_prefix_suffix(prefix, event, cols, obj)
+
+        # Se não houver prefixo nem sufixo, tenta os eventos especiais
+        parser_tuple = self.sp_event.get(event)
+        if parser_tuple:
+            prefix_parser, suffix_parser = parser_tuple
+            result, remaining = prefix_parser.parse(cols[9:])
+            obj.update(result)
+            obj.update(suffix_parser.parse(remaining))
+            return obj
+
+        # Se nada for encontrado, levanta um erro
+        raise ValueError(f"Formato de evento desconhecido: {event}")
+
+    def _find_prefix(self, event: str) -> str | None:
+        """
+        Encontra o prefixo mais longo que corresponde ao início do evento.
+
+        Args:
+            event (str): Nome do evento.
+
+        Returns:
+            str | None: O prefixo encontrado ou None se nenhum prefixo for encontrado.
+        """
+        for prefix in sorted(self.ev_prefix, key=len, reverse=True):
+            if event.startswith(prefix):
+                return prefix
+        return None
+
+    def _parse_prefix_suffix(
+        self, prefix: str, event: str, cols: list, obj: dict
+    ) -> dict:
+        """
+        Analisa um evento com prefixo e sufixo.
+
+        Args:
+            prefix (str): Prefixo do evento.
+            event (str): Nome do evento completo.
+            cols (list): Lista de colunas do evento.
+            obj (dict): Objeto base para o evento.
+
+        Returns:
+            dict: Objeto atualizado com os dados do evento.
+        """
+        suffix = event[len(prefix) :]
+        suffix_parser = self.ev_suffix.get(suffix)
+        if not suffix_parser:
+            raise ValueError(f"Sufixo de evento desconhecido: {suffix}")
+
+        prefix_parser = self.ev_prefix[prefix]
+        result, remaining = prefix_parser.parse(cols[9:])
+        obj.update(result)
+        suffix_parser.raw = cols  # Atribui os dados brutos ao parser de sufixo
+        obj.update(suffix_parser.parse(remaining))
         return obj
 
     def read_file(self, fname):
