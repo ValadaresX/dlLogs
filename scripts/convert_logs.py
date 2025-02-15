@@ -1,21 +1,38 @@
-import cProfile
-import csv
-import datetime
-import io
+import ast
 import json
 import logging
 import os
-import pstats
+import re
+import sys
 import time
+from datetime import datetime  # Certifique-se de importar datetime
+from functools import lru_cache
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
-from colorama import Fore, Style
 from rich import box
 from rich.console import Console
 from rich.table import Table
 from rich.theme import Theme
 from tqdm import tqdm
+
+if str(getattr(sys.stdout, "encoding", "")).lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+    stream=sys.stdout,
+    encoding="utf-8",  # Garante que a saída seja em UTF-8
+)
+
+TIMESTAMP_REGEX = re.compile(
+    r"^(?P<date>\d{1,2}/\d{1,2}(?:/\d{4})?)\s+"
+    r"(?P<time>\d{1,2}:\d{2}:\d{2}\.\d+)"  # permite 3 ou mais dígitos após o ponto
+    r"(?P<offset>[+-]\d+)?\s+(?P<rest>.*)$"
+)
+# Cache para evitar chamar strptime repetidamente
+TIMESTAMP_CACHE = {}
 
 # Define icons
 ICON_CHECK = "[OK]"
@@ -65,23 +82,34 @@ _SCHOOL_FLAG_MAP = {
 }
 
 
+@lru_cache(maxsize=None)
+def parse_unit_flag_cached(flag: int) -> list:
+    return [_UNIT_FLAG_MAP[k] for k in _UNIT_FLAG_MAP if flag & k]
+
+
 def parse_unit_flag(flag):
     """
-    Parse unit flags used in the game.
-
-    Args:
-        flag (int or str): The unit flag.
-
-    Returns:
-        list: A list of flag descriptions.
+    Converte o parâmetro 'flag' para inteiro (se for string) e utiliza o
+    cache para interpretar os flags.
+    Captura apenas ValueError e TypeError durante a conversão.
     """
-    f = int(flag, 0) if isinstance(flag, str) else flag
-    return [_UNIT_FLAG_MAP.get(k) for k in _UNIT_FLAG_MAP if f & k]
+    try:
+        f = int(flag, 0) if isinstance(flag, str) else flag
+    except (ValueError, TypeError):
+        f = 0
+    return parse_unit_flag_cached(f)
+
+
+@lru_cache(maxsize=None)
+def parse_school_flag_cached(school: int) -> list:
+    return [_SCHOOL_FLAG_MAP[k] for k in _SCHOOL_FLAG_MAP if school & k]
 
 
 def parse_school_flag(school):
     """
-    Parse school flags used in the game.
+    Converte o parâmetro 'school' para inteiro (se for string)
+    e utiliza o cache para interpretar os flags de escola.
+    Captura apenas ValueError e TypeError durante a conversão.
 
     Args:
         school (int or str): The school flag.
@@ -89,8 +117,11 @@ def parse_school_flag(school):
     Returns:
         list: A list of school names.
     """
-    s = int(school, 0) if isinstance(school, str) else school
-    return [_SCHOOL_FLAG_MAP.get(k) for k in _SCHOOL_FLAG_MAP if s & k]
+    try:
+        s = int(school, 0) if isinstance(school, str) else school
+    except (ValueError, TypeError):
+        s = 0
+    return parse_school_flag_cached(s)
 
 
 def resolv_power_type(pt):
@@ -141,7 +172,7 @@ class SpellParser:
         return (
             {
                 "spellId": cols[0],
-                "spellName": cols[1],
+                "spellName": cols[1].strip('"'),
                 "spellSchool": parse_school_flag(cols[2]),
             },
             cols[3:],
@@ -175,47 +206,105 @@ class WorldMarkerParser:
 
 class DamageParser:
     def parse(self, cols):
-        cols = cols[8:]
-        try:
-            return {
-                "amount": int(cols[0]) if cols[0] != "nil" else 0,
-                "overkill": cols[1],
-                "school": parse_school_flag(cols[2]),
-                "resisted": float(cols[3]),
-                "blocked": float(cols[4]),
-                "absorbed": float(cols[5]),
-                "critical": cols[6] != "nil",
-                "glancing": cols[7] != "nil",
-                "crushing": cols[8] != "nil",
-            }
-        except ValueError as e:
-            logging.error(f"Error parsing ENVIRONMENTAL_DAMAGE: {e}")
-            return {}
+        # Suporte para logs legados com menos de 25 colunas (por exemplo, 9 ou 10 colunas)
+        if len(cols) < 25:
+            if len(cols) >= 9:
+                try:
+                    return {
+                        "amount": int(cols[0]),
+                        "overkill": cols[1],
+                        "school": parse_school_flag(cols[2]),
+                        "resisted": float(cols[3]) if cols[3] != "nil" else 0.0,
+                        "blocked": float(cols[4]) if cols[4] != "nil" else 0.0,
+                        "absorbed": float(cols[5]) if cols[5] != "nil" else 0.0,
+                        "critical": cols[6] != "nil",
+                        "glancing": cols[7] != "nil",
+                        "crushing": cols[8] != "nil",
+                    }
+                except (ValueError, TypeError, IndexError) as error:
+                    logging.error(
+                        "Erro ao converter log legado no DamageParser: %s", error
+                    )
+                    logging.debug("Contexto legado: %s", cols)
+                    return {}
+            else:
+                logging.error(
+                    "Colunas insuficientes para DamageParser em log legado: %s colunas recebidas.",
+                    len(cols),
+                )
+                logging.debug("Contexto legado: %s", cols)
+                return {}
+
+        # Lógica para a versão mais nova do log (mínimo de 25 colunas)
+        def parse_val(value, type_cast, field_name, index):
+            try:
+                if value == "nil":
+                    return 0 if type_cast == int else 0.0
+                return type_cast(value)
+            except (ValueError, TypeError) as error:
+                error_msg = "Campo %s (índice %s) valor '%s': %s" % (
+                    field_name,
+                    index,
+                    value,
+                    str(error).split(":")[-1].strip(),
+                )
+                logging.error("%s", error_msg)
+                logging.debug("Contexto completo: %s", cols)
+                return 0
+
+        return {
+            "amount": parse_val(cols[16], int, "amount", 16),
+            "overkill": cols[17],
+            "school": parse_school_flag(cols[18]),
+            "resisted": parse_val(cols[19], float, "resisted", 19),
+            "blocked": parse_val(cols[20], float, "blocked", 20),
+            "absorbed": parse_val(cols[21], float, "absorbed", 21),
+            "critical": cols[22] != "nil",
+            "glancing": cols[23] != "nil",
+            "crushing": cols[24] != "nil",
+        }
 
 
 class MissParser:
     def parse(self, cols):
-        obj = {"missType": cols[0]}
-        if len(cols) > 1:
-            obj["isOffHand"] = cols[1]
-        if len(cols) > 2:
-            obj["amountMissed"] = int(cols[2])
+        obj = {
+            "missType": cols[0],
+            "isOffHand": None if cols[1].lower() == "nil" else cols[1],
+        }
+
+        # Processa campos adicionais de forma concisa
+        for i, val in enumerate(cols[2:], start=2):
+            if i == 2:
+                try:
+                    obj["amountMissed"] = int(val)
+                except (ValueError, IndexError):
+                    obj["unknownField"] = val
+            else:
+                obj.setdefault("extraFields", []).append(val)
+
         return obj
 
 
 class HealParser:
     def parse(self, cols):
         cols = cols[8:]
+
+        def parse_i(x):
+            return 0 if x == "nil" else int(x)
+
         return {
-            "amount": int(cols[0]),
-            "overhealing": int(cols[1]),
-            "absorbed": int(cols[2]),
+            "amount": parse_i(cols[0]),
+            "overhealing": parse_i(cols[1]),
+            "absorbed": parse_i(cols[2]),
             "critical": cols[3] != "nil",
         }
 
 
 class HealAbsorbedParser:
     def parse(self, cols):
+        def parse_i(x):
+            return 0 if x == "nil" else int(x)
+
         return {
             "casterGUID": cols[0],
             "casterName": cols[1],
@@ -224,8 +313,8 @@ class HealAbsorbedParser:
             "absorbSpellId": cols[4],
             "absorbSpellName": cols[5],
             "absorbSpellSchool": parse_school_flag(cols[6]),
-            "amount": int(cols[7]),
-            "totalAmount": int(cols[8]),
+            "amount": parse_i(cols[7]),
+            "totalAmount": parse_i(cols[8]),
             "critical": cols[8] != "nil",
         }
 
@@ -233,18 +322,28 @@ class HealAbsorbedParser:
 class EnergizeParser:
     def parse(self, cols):
         cols = cols[8:]
+
+        def parse_i(x):
+            return 0 if x == "nil" else int(x)
+
         return {
-            "amount": int(cols[0]),
+            "amount": parse_i(cols[0]),
             "powerType": resolv_power_type(cols[1]),
         }
 
 
 class DrainParser:
     def parse(self, cols):
-        amount = int(cols[11])
+        def parse_i(x):
+            return 0 if x == "nil" else int(x)
+
+        def parse_f(x):
+            return 0.0 if x == "nil" else float(x)
+
+        amount = parse_i(cols[11])
         powerType = resolv_power_type(cols[12])
-        maxPower = float(cols[13])
-        extraAmount = int(cols[14])
+        maxPower = parse_f(cols[13])
+        extraAmount = parse_f(cols[14])
         return {
             "amount": amount,
             "powerType": powerType,
@@ -255,10 +354,13 @@ class DrainParser:
 
 class LeechParser:
     def parse(self, cols):
+        def parse_i(x):
+            return 0 if x == "nil" else int(x)
+
         return {
-            "amount": int(cols[0]),
+            "amount": parse_i(cols[0]),
             "powerType": resolv_power_type(cols[1]),
-            "extraAmount": int(cols[2]),
+            "extraAmount": parse_i(cols[2]),
         }
 
 
@@ -276,18 +378,39 @@ class SpellBlockParser:
 
 class ExtraAttackParser:
     def parse(self, cols):
-        return {"amount": int(cols[0])}
+        def parse_i(x):
+            return 0 if x == "nil" else int(x)
+
+        return {"amount": parse_i(cols[0])}
 
 
 class AuraParser:
-    def parse(self, cols):
+    def parse(self, cols: list) -> dict:
+        """
+        Analisa os parâmetros do evento de aura.
+
+        Retorna um dicionário contendo:
+          - auraType (primeiro elemento)
+          - amount (tenta converter para inteiro; se não for
+            numérico, mantém o valor original)
+          - auraExtra1 e auraExtra2 se presentes.
+        """
+
+        def safe_int(x: str):
+            try:
+                return int(x)
+            except (ValueError, TypeError):
+                return x  # retorna o valor original se não puder ser convertido
+
         obj = {"auraType": cols[0]}
         if len(cols) >= 2:
-            obj["amount"] = int(cols[1])
+            obj["amount"] = safe_int(cols[1])
         if len(cols) >= 3:
             obj["auraExtra1"] = cols[2]
         if len(cols) >= 4:
             obj["auraExtra2"] = cols[3]
+        if len(cols) >= 5:  # Novo campo para set bonuses
+            obj["sourceType"] = cols[4]
         return obj
 
 
@@ -311,7 +434,7 @@ class AuraBrokenParser:
 
 class CastFailedParser:
     def parse(self, cols):
-        return {"failedType": cols[0]}
+        return {"failedType": cols[0].strip('"')}
 
 
 class EnchantParser:
@@ -387,30 +510,22 @@ class VoidSuffixParser:
 
 class SpellAbsorbedParser:
     def parse(self, cols):
-        if len(cols) >= 20:
+        try:
+            has_data = len(cols) >= 11
             return {
-                "casterGUID": cols[0],
-                "casterName": cols[1],
-                "casterFlags": parse_unit_flag(cols[2]),
-                "casterRaidFlags": parse_unit_flag(cols[3]),
-                "absorbSpellId": cols[4],
-                "absorbSpellName": cols[5],
-                "absorbSpellSchool": parse_school_flag(cols[6]),
-                "amount": int(cols[7]),
-                "critical": cols[8] != "nil",
+                "absorbSpellId": cols[7] if has_data else None,
+                "absorbSpellName": cols[8] if has_data else None,
+                "absorbSpellSchool": parse_school_flag(cols[9]) if has_data else [],
+                "absorberGUID": cols[3] if has_data else None,
+                "absorberName": cols[4] if has_data else None,
+                "absorberFlags": parse_unit_flag(cols[5]) if has_data else [],
+                "absorberRaidFlags": parse_unit_flag(cols[6]) if has_data else [],
+                "amount": int(cols[10], 0) if has_data and cols[10] != "nil" else 0,
+                "critical": cols[11] != "nil" if has_data and len(cols) > 11 else False,
             }
-        else:
-            return {
-                "casterGUID": None,
-                "casterName": None,
-                "casterFlags": [],
-                "casterRaidFlags": [],
-                "spellId": cols[1],
-                "spellName": cols[2],
-                "spellSchool": parse_school_flag(cols[3]),
-                "amount": int(cols[4]),
-                "critical": cols[-1] != "nil",
-            }
+        except Exception as error:
+            logging.error("SpellAbsorbedParser: %s", str(error).split(":")[-1].strip())
+            return {}
 
 
 class Parser:
@@ -424,6 +539,9 @@ class Parser:
             "ENVIRONMENTAL": EnvParser(),
             "WORLD": WorldPrefixParser(),
         }
+        # Pré-computa a lista de prefixos ordenados do maior para o menor comprimento.
+        self.sorted_prefix_list = sorted(self.ev_prefix, key=len, reverse=True)
+
         self.ev_suffix = {
             "_MARKER_PLACED": WorldMarkerParser(),
             "_HEAL_ABSORBED": HealAbsorbedParser(),
@@ -486,57 +604,54 @@ class Parser:
             "ARENA_MATCH_END": ArenaMatchEndParser(),
         }
 
+    def parse_timestamp(self, line: str) -> tuple[float, str]:
+        line_hash = hash(line)
+        if line_hash in TIMESTAMP_CACHE:
+            return TIMESTAMP_CACHE[line_hash]
+        m = TIMESTAMP_REGEX.match(line)
+        if not m:
+            raise ValueError(f"Formato inválido: {line}")
+        date_part, time_part, offset_str, rest = (
+            m.group("date"),
+            m.group("time"),
+            m.group("offset"),
+            m.group("rest"),
+        )
+        dt_str = (
+            f"{date_part}/{datetime.now().year} {time_part}"
+            if date_part.count("/") == 1
+            else f"{date_part} {time_part}"
+        )
+        ts = datetime.strptime(dt_str, "%m/%d/%Y %H:%M:%S.%f").timestamp() + (
+            int(offset_str) if offset_str else 0
+        )
+        TIMESTAMP_CACHE[line_hash] = (ts, rest)
+        return ts, rest
+
     def parse_line(self, line: str) -> dict:
         """
-        Parse a combat log line into a structured object.
-
-        Args:
-            line (str): A line of text representing a combat log event.
-
-        Returns:
-            dict: A dictionary containing the structured event data or error information.
+        Analisa uma linha do log de combate e retorna um objeto estruturado.
+        Versão otimizada que reduz alocações de memória e operações redundantes.
         """
+        # Cache do regex compilado como variável de classe
+        if not hasattr(self, "_SPLIT_REGEX"):
+            self._SPLIT_REGEX = re.compile(r",(?![^\[]*\])")
+
         try:
-            # Replace special string to avoid splitting issues
-            line = line.replace("Rated Solo Shuffle", "Rated_Solo_Shuffle")
+            # Extrai timestamp e texto sem strip desnecessário
+            ts, csv_text = self.parse_timestamp(line)
 
-            # Split into fixed parts and CSV
-            terms = line.split(" ", 3)
-            if len(terms) < 4:
-                return {
-                    "event": line.split(",")[
-                        0
-                    ],  # Pega o tipo do evento da linha inválida
-                    "error": f"Formato inválido: {line}",
-                    "raw_data": line,
-                }
+            # Split direto usando regex compilado, sem strip redundante
+            columns = self._SPLIT_REGEX.split(csv_text)
 
-            # Parse date parts
-            month, day = map(int, terms[0].split("/"))
-            year = datetime.datetime.today().year
+            # Validação rápida sem len()
+            if not columns[0]:
+                raise ValueError("CSV vazio")
 
-            # Extrair time_str e seconds
-            time_str = terms[1][:-4]
-            seconds = float(terms[1][-4:])
+            return self.parse_cols(ts, columns)
 
-            # Create timestamp
-            date_str = f"{year}/{month:02d}/{day:02d} {time_str}"
-            date_obj = datetime.datetime.strptime(date_str, "%Y/%m/%d %H:%M:%S")
-            timestamp = time.mktime(date_obj.timetuple()) + seconds
-
-            # Process CSV
-            csv_text = terms[3].strip()
-            csv_file = io.StringIO(csv_text)
-            reader = csv.reader(csv_file, delimiter=",")
-            columns = next(reader)
-
-            return self.parse_cols(timestamp, columns)
-
-        except Exception as e:
-            # Se qualquer erro ocorrer durante o processamento,
-            # retorna um dicionário com informações do erro
-            event = line.split(",")[0] if "," in line else line
-            return {"event": event, "error": str(e), "raw_data": line}
+        except (IndexError, AttributeError) as error:
+            raise ValueError(f"Erro ao processar a linha: {line}") from error
 
     def parse_cols(self, ts: float, cols: list) -> dict:
         """
@@ -551,94 +666,97 @@ class Parser:
         Args:
             ts (float): Timestamp do evento em segundos desde a época.
             cols (list): Lista de strings representando as colunas do evento,
-            extraídas do CSV.
+                         extraídas do CSV.
 
         Returns:
             dict: Um dicionário contendo os dados estruturados do evento,
-            incluindo informações sobre os participantes, tipo de evento e
-            dados específicos do evento.
+                  incluindo informações sobre os participantes, tipo de evento e
+                  dados específicos do evento.
 
         Raises:
             ValueError: Se ocorrer um erro ao analisar os dados do evento ou
-            se o formato das colunas for inesperado.
+                        se o formato das colunas for inesperado.
         """
-
         event = cols[0]
         if event in ("WORLD_MARKER_PLACED", "WORLD_MARKER_REMOVED"):
             return {}
-
         obj = {"timestamp": ts, "event": event}
-
         try:
             if event == "COMBATANT_INFO":
                 return self.parse_combatant_info(ts, cols)
-
-            obj = self._handle_special_events(ts, cols, obj)
-            if obj:
-                return obj
-
+            special_obj = self._handle_special_events(ts, cols, obj)
+            if special_obj is not None:
+                return special_obj
             obj = self._parse_base_parameters(cols, obj)
-
             obj = self._handle_prefix_suffix_events(cols, obj)
-
         except ValueError as e:
             raise ValueError(
-                "Error parsing event: %s\nLine: %s\nError: %s"
+                "Erro ao processar a linha: %s\nLine: %s\nErro: %s"
                 % (event, ",".join(cols), e)
             ) from e
-
         return obj
 
-    def _handle_special_events(self, ts: float, cols: list, obj: dict) -> dict:
+    def _handle_special_events(self, ts: float, cols: list, obj: dict) -> dict | None:
         """
-        Lida com eventos especiais como COMBATANT_INFO, encontros e arenas.
-
-        Args:
-            ts (float): Timestamp do evento.
-            cols (list): Lista de colunas do evento.
-            obj (dict): Objeto base para o evento.
-
-        Returns:
-            dict: Objeto atualizado com os dados do evento especial,
-            ou o objeto original se o evento não for especial.
+        Trata eventos especiais que não seguem o formato padrão.
         """
         event = cols[0]
-        # Simplifica a lógica de mapeamento de eventos
         if event == "COMBATANT_INFO":
-            obj.update(self.parse_combatant_info(ts, cols[1:]))
+            return self.parse_combatant_info(ts, cols[1:])
         elif event in self.enc_event:
             obj.update(self.enc_event[event].parse(cols[1:]))
+            return obj
         elif event in self.arena_event:
             obj.update(self.arena_event[event].parse(cols[1:]))
-        return obj
+            return obj
+        elif event == "ZONE_CHANGE":
+            # Para ZONE_CHANGE, o formato esperado é:
+            # ["ZONE_CHANGE", zoneId, zoneName, zoneFlag]
+            if len(cols) < 4:
+                raise ValueError(
+                    f"Formato inválido para o evento ZONE_CHANGE: número insuficiente de colunas ({len(cols)} < 4)"
+                )
+            return {
+                "timestamp": ts,
+                "event": "ZONE_CHANGE",
+                "zoneId": cols[1],
+                "zoneName": cols[2],
+                "zoneFlag": cols[3],
+            }
+        return None
 
     def _parse_base_parameters(self, cols: list, obj: dict) -> dict:
         """
         Analisa os parâmetros base de um evento (GUIDs, nomes, flags).
-
-        Args:
-            cols (list): Lista de colunas do evento.
-            obj (dict): Objeto base para o evento.
-
-        Returns:
-            dict: Objeto atualizado com os parâmetros base.
         """
-        # Adiciona uma verificação mais robusta para o comprimento das colunas
-        if len(cols) < 9:
+        event = cols[0]
+
+        # Define número mínimo de colunas por evento usando dict para acesso O(1)
+        colunas_minimas = {
+            "SPELL_DAMAGE": 17,
+            "SPELL_HEAL": 17,
+            "RANGE_DAMAGE": 17,
+            "RANGE_MISSED": 17,
+            "SPELL_PERIODIC_DAMAGE": 17,
+            "SPELL_PERIODIC_HEAL": 17,
+            "SWING_MISSED": 11,
+        }
+
+        required_columns = colunas_minimas.get(event, 9)
+        if len(cols) < required_columns:
             raise ValueError(
-                f"Formato inválido para o evento {cols[0]}: "
-                f"número insuficiente de colunas ({len(cols)} < 9)"
+                f"Formato inválido para {event}: "
+                f"colunas insuficientes ({len(cols)} < {required_columns})"
             )
 
-        # Simplifica a extração de flags
         obj.update(
             {
                 "sourceGUID": cols[1],
-                "sourceName": cols[2],
+                "sourceName": cols[2].strip('"'),
                 "sourceFlags": parse_unit_flag(cols[3]),
                 "sourceRaidFlags": parse_unit_flag(cols[4]),
                 "destGUID": cols[5],
-                "destName": cols[6],
+                "destName": cols[6].strip('"'),
                 "destFlags": parse_unit_flag(cols[7]),
                 "destRaidFlags": parse_unit_flag(cols[8]),
             }
@@ -683,15 +801,10 @@ class Parser:
 
     def _find_prefix(self, event: str) -> str | None:
         """
-        Encontra o prefixo mais longo que corresponde ao início do evento.
-
-        Args:
-            event (str): Nome do evento.
-
-        Returns:
-            str | None: O prefixo encontrado ou None se nenhum prefixo for encontrado.
+        Encontra o prefixo mais longo que corresponde ao início do evento utilizando
+        a lista pré-ordenada de prefixos.
         """
-        for prefix in sorted(self.ev_prefix, key=len, reverse=True):
+        for prefix in self.sorted_prefix_list:
             if event.startswith(prefix):
                 return prefix
         return None
@@ -741,8 +854,8 @@ class Parser:
                     if line.strip():
                         try:
                             yield self.parse_line(line)
-                        except ValueError as e:
-                            logging.error("Error parsing line in file %s: %s", fname, e)
+                        except (OSError, ValueError) as error:
+                            logging.error("Error processing %s: %s", fname, error)
                             logging.error("Line with error: %s", line)
                             return
         except IOError as e:
@@ -878,208 +991,204 @@ class Parser:
                 }
         return {"id": spec_id, "class": "Unknown", "spec": "Unknown"}
 
-    def process_cols(self, cols, group_type):
-        combined_string = ",".join(cols).replace("@", ",")
-
-        def find_delimiters(combined_string, delimiters):
-            groups = []
-            stack = []
-            start_index = -1
-
-            for i, char in enumerate(combined_string):
-                if char in delimiters["open"]:
-                    stack.append(char)
-                    if len(stack) == 1:
-                        start_index = i
-                elif char in delimiters["close"] and stack:
-                    stack.pop()
-                    if not stack:
-                        groups.append((start_index, i))
-            return groups
-
-        delimiters = {"open": ["[", "("], "close": ["]", ")"]}
-        groups = find_delimiters(combined_string, delimiters)
-        artifact_traits_present = len(groups) > 4
-
-        group_mapping = {
-            "class_talents": 0,
-            "pvp_talents": 1,
-            "artifact_traits": 2 if artifact_traits_present else None,
-            "equipped_items": 3 if artifact_traits_present else 2,
-            "interesting_auras": 4 if artifact_traits_present else 3,
+    def process_cols_improved(self, cols):
+        """
+        Processa colunas de forma otimizada usando um único loop e detecção de padrões.
+        Reduz iterações e alocações de memória.
+        """
+        resultado = {
+            "class_talents": [],
+            "pvp_talents": [],
+            "artifact_traits": None,
+            "equipped_items": [],
+            "interesting_auras": [],
+            "pvp_stats": cols[-4:],
         }
 
-        def extract_group(combined_string, group_indices, index):
-            start, end = group_indices[index]
-            return combined_string[start + 1 : end].split(",", end - start - 1)
+        i = 0
+        tamanho = len(cols)
 
-        if group_type == "pvpStats":
-            return combined_string.split(",")[-4:]
+        while i < tamanho:
+            coluna = cols[i]
 
-        index = group_mapping.get(group_type)
-        if index is not None:
-            group_data = extract_group(combined_string, groups, index)
-        else:
-            group_data = []
-        return group_data
+            # Pula colunas vazias
+            if not coluna:
+                i += 1
+                continue
 
-    def extract_class_talents(self, cols):
-        class_talents_raw = self.process_cols(cols, "class_talents")
-        class_talents = []
-        for i in range(0, len(class_talents_raw), 3):
-            talent_group = class_talents_raw[i : i + 3]
-            talent_id, spell_id, rank = [int(part.strip("()")) for part in talent_group]
-            talent_info = {"talentId": talent_id, "spellId": spell_id, "rank": rank}
-            class_talents.append(talent_info)
-        return class_talents
-
-    def extract_pvp_talents(self, cols):
-        pvp_talents_raw = self.process_cols(cols, "pvp_talents")
-        pvp_talents_info = {}
-        for i, talent in enumerate(pvp_talents_raw):
-            talent_id = int(talent.strip("()"))
-            talent_key = f"pvp_talent_{i + 1}"
-            pvp_talents_info[talent_key] = talent_id
-        return pvp_talents_info
-
-    def extract_equipped_items(self, cols):
-        """
-        Extrai e reconstrói itens equipados a partir de dados brutos de coluna.
-
-        Esse método processa uma lista de dados brutos de itens equipados, reconstruindo
-        reconstruindo-a em dicionários estruturados para cada item. Ele lida com
-        partes do item entre parênteses e garante que elas estejam corretamente
-        balanceadas e formatados antes de extrair os detalhes relevantes.
-
-        Args:
-            cols (lista): Lista de cadeias de caracteres que representam as colunas do
-            evento, extraídas do CSV.
-
-        Retorna:
-            list: Uma lista de dicionários, cada um representando um item equipado
-                com as chaves 'item_id', 'item_level', 'enchantments', 'bonus_list',
-                e 'gems'.
-
-        Aumenta:
-            ValueError: Se os parênteses nos dados brutos estiverem desequilibrados.
-        """
-
-        equipped_items_raw = self.process_cols(cols, "equipped_items")
-        reconstructed_dicts = []
-        temp_item_parts = []  # Utilizar lista para acumular partes do item
-        parenthesis_count = 0
-        n = len(equipped_items_raw)
-
-        for i, item_part in enumerate(equipped_items_raw):
-            temp_item_parts.append(item_part)
-            # Atualizar o contador de parênteses
-            parenthesis_count += item_part.count("(") - item_part.count(")")
-
-            # Verificar se deve adicionar uma vírgula
-            if i < n - 1:
-                next_part = equipped_items_raw[i + 1]
-                if not (item_part.endswith(")") and next_part.startswith("(")) or (
-                    item_part == "()" and next_part == "()"
+            # Identifica o tipo de dado baseado no padrão de início/fim
+            if coluna.startswith("["):
+                # Equipped items: começa com [(
+                if len(coluna) > 1 and coluna[1] == "(":
+                    lista = resultado["equipped_items"]
+                    fim = ")]"
+                # Class talents: primeiro grupo com [
+                elif not resultado["class_talents"]:
+                    lista = resultado["class_talents"]
+                    fim = "]"
+                # Artifact traits: segundo grupo com [ sem (
+                elif resultado["artifact_traits"] is None and (
+                    len(coluna) < 2 or coluna[1] != "("
                 ):
-                    temp_item_parts.append(",")
+                    lista = []
+                    resultado["artifact_traits"] = lista
+                    fim = "]"
+                # Interesting auras: último grupo com [
+                else:
+                    lista = resultado["interesting_auras"]
+                    fim = "]"
 
-            # Quando os parênteses estiverem balanceados, processar o item
-            if parenthesis_count == 0 and temp_item_parts:
-                temp_item = "".join(temp_item_parts)
-                # Substituições específicas para garantir o formato correto
-                temp_item = temp_item.replace("()()", "(),()").replace(")(", "),(")
-                parts = temp_item.strip("()").split(",")
+                # Coleta tokens até encontrar o fim do grupo
+                while not coluna.endswith(fim):
+                    lista.append(coluna)
+                    i += 1
+                    coluna = cols[i]
+                lista.append(coluna)
 
-                # Construir o dicionário do item de forma mais eficiente
-                item_dict = {
-                    "item_id": int(parts[0]),
-                    "item_level": int(parts[1]),
-                    "enchantments": [
-                        int(x) for x in parts[2].strip("()").split(",") if x
-                    ],
-                    "bonus_list": [
-                        int(x) for x in parts[3].strip("()").split(",") if x
-                    ],
-                    "gems": [int(x) for x in parts[4].strip("()").split(",") if x],
-                }
-                reconstructed_dicts.append(item_dict)
-                # Resetar as partes temporárias para o próximo item
-                temp_item_parts = []
+            # PvP talents: começa com (
+            elif coluna.startswith("("):
+                lista = resultado["pvp_talents"]
+                while not coluna.endswith(")"):
+                    lista.append(coluna)
+                    i += 1
+                    coluna = cols[i]
+                lista.append(coluna)
 
-        # Verificar se os parênteses estão balanceados
-        if parenthesis_count != 0:
-            raise ValueError("Parênteses desbalanceados na entrada")
+            i += 1
 
-        return reconstructed_dicts
+        return resultado
 
-    def extract_interesting_auras(self, cols):
-        auras_raw = self.process_cols(cols, "interesting_auras")
-        auras_extracted = []
-        if not auras_raw or all(element == "" for element in auras_raw):
-            return auras_extracted
-        for i in range(0, len(auras_raw), 2):
-            player_guid = auras_raw[i]
-            spell_id = auras_raw[i + 1]
-            if player_guid and spell_id.isdigit():
-                aura_dict = {"player_guid": player_guid, "spell_id": int(spell_id)}
-                auras_extracted.append(aura_dict)
-        return auras_extracted
-
-    def extract_pvp_stats(self, cols):
-        pvp_stats_raw = self.process_cols(cols, "pvpStats")
-        if len(pvp_stats_raw) != 4:
-            error_message = (
-                f"Error: expected 4 items in 'pvp_stats_raw', "
-                f"found: {len(pvp_stats_raw)}.\n"
-                f"List content: {pvp_stats_raw}"
-            )
-            raise ValueError(error_message)
-        pvp_stats = [int(stat) for stat in pvp_stats_raw]
-        pvp_stats_dict = {
-            "honor_level": pvp_stats[0],
-            "season": pvp_stats[1],
-            "rating": pvp_stats[2],
-            "tier": pvp_stats[3],
+    def process_class_talents(self, tokens):
+        return {
+            f"Class Talent {i+1}": {
+                "talent_id": int(a.lstrip("([ ")),
+                "talent_spec": int(b),
+                "rank": int(c.rstrip(")] ")),
+            }
+            for i, (a, b, c) in enumerate(zip(tokens[0::3], tokens[1::3], tokens[2::3]))
         }
-        return pvp_stats_dict
+
+    def process_pvp_talents(self, tokens):
+        t = [s.strip("()[]") for s in tokens if s.strip("()[]")]
+        return {f"PvP Talent {i+1}": t[i] for i in range(len(t))}
+
+    def process_artifact_traits(self, tokens):
+        t = [s.strip("()[]") for s in (tokens or []) if s.strip("()[]")]
+        keys = [
+            "Artifact Trait ID 1",
+            "Trait Effective Level 1",
+            "Artifact Trait ID 2",
+            "Artifact Trait ID 3",
+            "Artifact Trait ID 4",
+        ]
+        return {
+            keys[i] if i < len(keys) else f"Artifact Trait {i+1}": v
+            for i, v in enumerate(t)
+        }
+
+    def process_equipped_items(self, tokens):
+        try:
+            concatenated = ",".join(tokens)
+            items_list = ast.literal_eval(concatenated)
+
+            processed_items = []
+            for item in items_list:
+                if not isinstance(item, tuple):
+                    continue
+
+                item_id = item[0]
+                item_level = item[1]
+                enchantments = item[2] if len(item) > 2 else ()
+                bonus_list = item[3] if len(item) > 3 else ()
+                gems = item[4] if len(item) > 4 else ()
+
+                if not (isinstance(item_id, int) and isinstance(item_level, int)):
+                    continue
+
+                processed_items.append(
+                    {
+                        "item_id": item_id,
+                        "item_level": item_level,
+                        "enchantments": enchantments,
+                        "bonus_list": bonus_list,
+                        "gems": gems,
+                    }
+                )
+
+            return processed_items
+        except (SyntaxError, ValueError, IndexError) as e:
+            print(f"Erro ao processar itens equipados: {e}")
+            return []
+
+    def process_interesting_auras(self, tokens):
+        clean_tokens = [token.strip("()[]") for token in tokens if token.strip("()[]")]
+        return {
+            f"Aura {index+1}": {
+                "sourceGUID": clean_tokens[2 * index],
+                "auraId": clean_tokens[2 * index + 1],
+            }
+            for index in range(len(clean_tokens) // 2)
+        }
+
+    def process_pvp_stats(self, tokens):
+        t = [s.strip("()[]") for s in tokens if s.strip("()[]")]
+        return {"Honor Level": t[0], "Season": t[1], "Rating": t[2], "Tier": t[3]}
 
     def parse_combatant_info(self, ts, cols):
+        try:
+            fixed = cols[1:25]
+            grp = self.process_cols_improved(cols[25:])
+        except Exception as e:
+            raise ValueError(f"Erro nos campos de COMBATANT_INFO: {e}") from e
 
-        info = {
-            "timestamp": ts,
-            "event": "COMBATANT_INFO",
-            "playerguid": cols[1],
-            "faction": int(cols[2]),
-            "character_stats": {
-                "strength": int(cols[3]),
-                "agility": int(cols[4]),
-                "stamina": int(cols[5]),
-                "intelligence": int(cols[6]),
-                "dodge": int(cols[7]),
-                "parry": int(cols[8]),
-                "block": int(cols[9]),
-                "critMelee": int(cols[10]),
-                "critRanged": int(cols[11]),
-                "critSpell": int(cols[12]),
-                "speed": int(cols[13]),
-                "lifesteal": int(cols[14]),
-                "hasteMelee": int(cols[15]),
-                "hasteRanged": int(cols[16]),
-                "hasteSpell": int(cols[17]),
-                "avoidance": int(cols[18]),
-                "mastery": int(cols[19]),
-                "versatilityDamageDone": int(cols[20]),
-                "versatilityHealingDone": int(cols[21]),
-                "versatilityDamageTaken": int(cols[22]),
-                "armor": int(cols[23]),
-            },
-            "currentSpecID": self.extract_spec_info(int(cols[24])),
-            "classTalents": self.extract_class_talents(cols),
-            "pvpTalents": self.extract_pvp_talents(cols),
-            "equippedItems": self.extract_equipped_items(cols),
-            "interestingAuras": self.extract_interesting_auras(cols),
-            "pvpStats": self.extract_pvp_stats(cols),
-        }
+        try:
+            stats = [
+                "strength",
+                "agility",
+                "stamina",
+                "intelligence",
+                "dodge",
+                "parry",
+                "block",
+                "critMelee",
+                "critRanged",
+                "critSpell",
+                "speed",
+                "lifesteal",
+                "hasteMelee",
+                "hasteRanged",
+                "hasteSpell",
+                "avoidance",
+                "mastery",
+                "versatilityDamageDone",
+                "versatilityHealingDone",
+                "versatilityDamageTaken",
+                "armor",
+            ]
+
+            info = {
+                "timestamp": ts,
+                "event": "COMBATANT_INFO",
+                "playerguid": fixed[0],
+                "faction": int(fixed[1]),
+                "character_stats": {k: int(fixed[i + 2]) for i, k in enumerate(stats)},
+                "currentSpecID": self.extract_spec_info(int(fixed[23])),
+            }
+
+            mappings = [
+                ("class_talents", "classTalents"),
+                ("pvp_talents", "pvpTalents"),
+                ("artifact_traits", "artifactTraits"),
+                ("equipped_items", "equippedItems"),
+                ("interesting_auras", "interestingAuras"),
+                ("pvp_stats", "pvpStats"),
+            ]
+
+            for src, dest in mappings:
+                info[dest] = getattr(self, f"process_{src}")(grp[src])
+
+        except Exception as e:
+            raise ValueError(f"Erro no processamento de COMBATANT_INFO: {e}") from e
 
         return info
 
@@ -1110,24 +1219,17 @@ def process_single_file(args):
     if output_file_path.exists():
         return
     try:
-        logging.debug(f"Processing file: {file_path}")
-        data_generator = parser.read_file(str(file_path))
-        first_item = next(data_generator, None)
-
-        if first_item:
-            logging.debug(f"First item: {first_item}")
+        logging.debug("Processing file: %s", file_path)
+        # Acumula todos os eventos do log em uma única lista
+        events = list(parser.read_file(str(file_path)))
+        if events:
             with open(output_file_path, "w", encoding="utf-8") as f:
-                f.write("[")
-                json.dump(first_item, f, ensure_ascii=False, indent=4)
-                for data in data_generator:
-                    f.write(", ")
-                    json.dump(data, f, ensure_ascii=False, indent=4)
-                f.write("]")
-
+                # Escreve todos os eventos de uma vez, otimizando o I/O
+                json.dump(events, f, ensure_ascii=False, indent=4)
             logging.info("JSON file written: %s", output_file_path)
 
-    except Exception as e:
-        logging.error("Error processing %s: %s", file_path, e)
+    except (OSError, ValueError) as error:
+        logging.error("Error processing %s: %s", file_path, error)
 
 
 def process_files(parser, txt_files, output_dir, max_workers=None):
@@ -1138,9 +1240,8 @@ def process_files(parser, txt_files, output_dir, max_workers=None):
         for _ in tqdm(
             pool.imap_unordered(process_single_file, args),
             total=len(txt_files),
-            desc=f"{Fore.GREEN}{ICON_CONVERTING}...{Style.RESET_ALL}",
-            bar_format="{l_bar}%s{bar}%s{r_bar}"
-            % (Fore.LIGHTGREEN_EX, Style.RESET_ALL),
+            desc=f"{ICON_CONVERTING}...",
+            bar_format="{l_bar}%s{bar}%s{r_bar}" % ("", ""),
             colour=None,
         ):
             pass
@@ -1149,121 +1250,173 @@ def process_files(parser, txt_files, output_dir, max_workers=None):
 def check_and_create_directories(input_dir, output_dir):
     custom_theme = Theme(
         {
+            "ok": "bold green",
             "created": "bold yellow",
-            "exists": "bold green",
             "error": "bold red",
+            "header": "bold bright_white",
+            "directory": "cyan",
         }
     )
-    console = Console(theme=custom_theme)
 
-    results = []
-    for directory in [input_dir, output_dir]:
-        dir_path = Path(directory)
-        dir_name = dir_path.name
-        if dir_path.exists():
-            results.append((dir_name, "Folder Exists", "exists"))
-        else:
-            try:
-                dir_path.mkdir(parents=True)
-                results.append((dir_name, "Created", "created"))
-            except OSError as e:
-                results.append((dir_name, f"Error: {e}", "error"))
+    console = Console(theme=custom_theme, force_terminal=True)
+
+    directories = [("Input", input_dir), ("Output", output_dir)]
 
     table = Table(
-        title="Directory Check Results",
-        box=box.ASCII,
-        show_header=True,
-        header_style="yellow3",
+        title="Verificação de Diretórios",
+        box=box.SQUARE,
+        header_style="header",
+        style="bright_white",
+        border_style="dim",
+        title_style="bold bright_white",
+        expand=True,
     )
-    table.add_column("Status", justify="center", style="bold red")
-    table.add_column("Directory", justify="center")
-    table.add_column("Message", justify="center", style="bold red")
 
-    for dir_name, status, style in results:
-        status_symbol = ICON_CREATE if status != "Folder Exists" else ICON_CHECK
-        table.add_row(
-            f"[{style}]{status_symbol}[/{style}]",
-            f"{dir_name}",
-            f"[{style}]{status}[/{style}]",
-        )
+    table.add_column("Status", justify="center", width=10)
+    table.add_column("Diretório", style="directory")
+    table.add_column("Tipo", justify="center")
+    table.add_column("Itens", justify="right")
+
+    for name, path in directories:
+        try:
+            if not path.exists():
+                path.mkdir(parents=True, exist_ok=True)
+                status = "[ok][OK][/]"
+                items = "-"
+            else:
+                status = "[ok][OK][/]"
+                items = str(len(list(path.glob("*"))))
+
+            table.add_row(status, str(path), name, items)
+        except OSError as error:
+            table.add_row("[error][ERROR][/]", str(path), name, f"Erro: {str(error)}")
 
     console.print(table)
 
 
-def run_verification_test(parser, test_input_file, expected_output_file):
-    console = Console()
-    console.print(f"Execução do teste de verificação em {test_input_file.name}...")
+def run_benchmark(parser, test_file, iterations=3, warmup=0):
+    """Versão otimizada para teste rápido de performance."""
+    result = {"timings": [], "stats": {}}
 
-    # Inicializa o profiler
-    profiler = cProfile.Profile()
-    profiler.enable()
+    # Warmup
+    if warmup > 0:
+        for _ in range(warmup):
+            list(parser.read_file(str(test_file)))
 
-    start_time = time.perf_counter()  # Inicia a contagem de tempo
-    data_generated = list(parser.read_file(str(test_input_file)))
-    end_time = time.perf_counter()  # Finaliza a contagem de tempo
+    # Medição principal
+    with tqdm(total=iterations, desc="Teste de Performance", unit="exec") as pbar:
+        for _ in range(iterations):
+            start_time = time.perf_counter()
+            list(parser.read_file(str(test_file)))  # Processa o arquivo
+            elapsed = time.perf_counter() - start_time
+            result["timings"].append(elapsed)
+            pbar.update(1)
+            pbar.set_postfix_str(f"Último: {elapsed:.2f}s")
 
-    profiler.disable()
-    duration = end_time - start_time  # Calcula a duração em segundos
-
-    # Cria um objeto Stats a partir do profiler
-    stats = pstats.Stats(profiler).sort_stats("cumulative")
-
-    # Exibe os 10 principais gargalos
-    stats.print_stats(10)
-
-    expected_output_path = Path(expected_output_file)
-    if not expected_output_path.exists():
-        console.print(
-            f"[red]O arquivo de saída esperado não foi encontrado: {expected_output_file}[/red]"
-        )
-        return False, duration
-    with open(expected_output_file, "r", encoding="utf-8") as f:
-        data_expected = json.load(f)
-    if data_generated == data_expected:
-        console.print(
-            f"[green]{ICON_SUCCESS} O teste de verificação foi aprovado![/green]"
-        )
-        console.print(f"Tempo gasto: {duration:.2f} segundos.")
-        return True, duration
+    # Cálculos estatísticos
+    if result["timings"]:
+        result["stats"] = {
+            "avg": sum(result["timings"]) / iterations,
+            "best": min(result["timings"]),
+            "worst": max(result["timings"]),
+        }
     else:
-        console.print(f"[red]{ICON_SUCCESS} O teste de verificação falhou![/red]")
-        console.print(f"Time taken: {duration:.2f} segundos.")
-        return False, duration
+        result["stats"] = {"avg": 0, "best": 0, "worst": 0}
+
+    return result
+
+
+def save_benchmark_history(history, file="benchmark_history.json"):
+    """Salva histórico de benchmarks para análise temporal"""
+    try:
+        with open(file, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2)
+    except (OSError, TypeError, ValueError) as e:  # Exceções reais do json.dump
+        logging.error("Erro salvando histórico: %s", e)
+
+
+def load_benchmark_history(file="benchmark_history.json"):
+    """Carrega histórico de benchmarks existente"""
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (IOError, json.JSONDecodeError) as e:
+        logging.error("Erro carregando histórico: %s", e)
+        return []
+
+
+def print_benchmark_report(stats):
+    """Relatório unificado de performance"""
+    console = Console()
+    table = Table(
+        title="Resultado do Teste de Performance",
+        box=box.SQUARE,
+        header_style="bold bright_white",
+        style="bright_white",
+        border_style="dim",
+        title_style="bold bright_white",
+    )
+
+    table.add_column("Métrica", style="cyan", justify="left")
+    table.add_column("Valor", style="green", justify="right")
+
+    table.add_row("Tempo Médio", f"{stats['avg']:.2f}s")
+    table.add_row("Melhor Tempo", f"{stats['best']:.2f}s")
+    table.add_row("Pior Tempo", f"{stats['worst']:.2f}s")
+
+    console.print(table)
 
 
 def main():
-    """Função principal que gerencia a criação do diretório de saída,
-    configuração de logging e processamento dos arquivos de entrada.
-    """
     setup_logging()
     input_dir = Path(r"E:\LogsWOW\logs")
     output_dir = Path(r"D:\Projetos_Git\dlLogs\scripts\output_json")
+
+    # 1. Verificação de diretórios (compatível com PowerShell)
     check_and_create_directories(input_dir, output_dir)
 
+    # 2. Configuração do parser
     parser = Parser()
-    txt_files = list(input_dir.glob("*.txt"))
-    total_files = len(txt_files)
-    logging.debug("niciando o processamento de %s arquivos.", total_files)
 
-    # Define test files
-    test_input_file = input_dir / "0026580d3a9a5e6909e407211cbe51e2.txt"
-    expected_output_file = output_dir / "0026580d3a9a5e6909e407211cbe51e2.json"
-
-    # Run verification test
-    test_passed = run_verification_test(parser, test_input_file, expected_output_file)
-    if not test_passed:
-        logging.error("Falha no teste de verificação. Saindo.")
-        return
-
-    # Ask user to continue
+    # 3. Execução do benchmark com múltiplos arquivos
     console = Console()
-    console.print("Deseja continuar processando o diretório atual? (S/N)")
-    choice = input().strip().upper()
-    if choice != "S":
-        console.print("Saindo...")
+    console.print("\n[bold]Iniciando teste de performance...[/]\n")
+
+    # Lista de arquivos para teste
+    test_files = [
+        "0026580d3a9a5e6909e407211cbe51e2.txt",
+        "0000786585380b93ff1e96666f012779.txt",
+        "20250127_124219_000f1b00a113541251d77acec2912d75.txt",
+    ]
+
+    # Executar benchmark para cada arquivo
+    for file_name in test_files:
+        benchmark_file = input_dir / file_name
+        if not benchmark_file.exists():
+            console.print(f"[red]Arquivo de teste não encontrado: {file_name}[/red]")
+            continue
+
+        console.print(f"\n[bold]Testando arquivo: {file_name}[/bold]")
+        result = run_benchmark(parser, benchmark_file)
+        print_benchmark_report(result["stats"])
+
+    # 5. Confirmação do usuário
+    console.print("\n[bold]Deseja processar TODOS os logs?[/bold]")
+    console.print("[yellow]ATENÇÃO: Esta operação pode demorar horas![/yellow]")
+    console.print(
+        "[dim](Digite S para continuar ou qualquer outra tecla para cancelar)[/dim]"
+    )
+
+    if input().strip().upper() != "S":
+        console.print("[red]Operação cancelada pelo usuário[/red]")
         return
 
-    process_files(parser, txt_files, output_dir)
+    # 6. Processamento principal
+    txt_files = list(input_dir.glob("*.txt"))
+    with console.status("[bold green]Processando arquivos...[/]", spinner="line"):
+        process_files(parser, txt_files, output_dir)
+
+    console.print("[bold green]✅ Processo concluído com sucesso![/]")
 
 
 if __name__ == "__main__":
