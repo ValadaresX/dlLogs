@@ -206,7 +206,8 @@ class WorldMarkerParser:
 
 class DamageParser:
     def parse(self, cols):
-        # Suporte para logs legados com menos de 25 colunas (por exemplo, 9 ou 10 colunas)
+        # Suporte para logs legados com menos de 25 colunas
+        # (por exemplo, 9 ou 10 colunas)
         if len(cols) < 25:
             if len(cols) >= 9:
                 try:
@@ -229,7 +230,8 @@ class DamageParser:
                     return {}
             else:
                 logging.error(
-                    "Colunas insuficientes para DamageParser em log legado: %s colunas recebidas.",
+                    "Colunas insuficientes para DamageParser em log legado: "
+                    "%s colunas recebidas.",
                     len(cols),
                 )
                 logging.debug("Contexto legado: %s", cols)
@@ -504,7 +506,7 @@ class ArenaMatchEndParser:
 
 
 class VoidSuffixParser:
-    def parse(self, cols):
+    def parse(self, _):
         return {}
 
 
@@ -523,7 +525,7 @@ class SpellAbsorbedParser:
                 "amount": int(cols[10], 0) if has_data and cols[10] != "nil" else 0,
                 "critical": cols[11] != "nil" if has_data and len(cols) > 11 else False,
             }
-        except Exception as error:
+        except (IndexError, ValueError, TypeError, AttributeError) as error:
             logging.error("SpellAbsorbedParser: %s", str(error).split(":")[-1].strip())
             return {}
 
@@ -539,6 +541,7 @@ class Parser:
             "ENVIRONMENTAL": EnvParser(),
             "WORLD": WorldPrefixParser(),
         }
+        self._split_regex = re.compile(r",(?![^\[]*\])")
         # Pré-computa a lista de prefixos ordenados do maior para o menor comprimento.
         self.sorted_prefix_list = sorted(self.ev_prefix, key=len, reverse=True)
 
@@ -633,16 +636,12 @@ class Parser:
         Analisa uma linha do log de combate e retorna um objeto estruturado.
         Versão otimizada que reduz alocações de memória e operações redundantes.
         """
-        # Cache do regex compilado como variável de classe
-        if not hasattr(self, "_SPLIT_REGEX"):
-            self._SPLIT_REGEX = re.compile(r",(?![^\[]*\])")
-
         try:
             # Extrai timestamp e texto sem strip desnecessário
             ts, csv_text = self.parse_timestamp(line)
 
             # Split direto usando regex compilado, sem strip redundante
-            columns = self._SPLIT_REGEX.split(csv_text)
+            columns = self._split_regex.split(csv_text)
 
             # Validação rápida sem len()
             if not columns[0]:
@@ -691,8 +690,7 @@ class Parser:
             obj = self._handle_prefix_suffix_events(cols, obj)
         except ValueError as e:
             raise ValueError(
-                "Erro ao processar a linha: %s\nLine: %s\nErro: %s"
-                % (event, ",".join(cols), e)
+                f"Erro ao processar a linha: {event}\nLine: {','.join(cols)}\nErro: {e}"
             ) from e
         return obj
 
@@ -714,7 +712,8 @@ class Parser:
             # ["ZONE_CHANGE", zoneId, zoneName, zoneFlag]
             if len(cols) < 4:
                 raise ValueError(
-                    f"Formato inválido para o evento ZONE_CHANGE: número insuficiente de colunas ({len(cols)} < 4)"
+                    f"Formato inválido para o evento ZONE_CHANGE: "
+                    f"número insuficiente de colunas ({len(cols)} < 4)"
                 )
             return {
                 "timestamp": ts,
