@@ -4,6 +4,8 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import json
+from datetime import datetime
 
 import chardet
 import requests
@@ -11,9 +13,62 @@ from tqdm import tqdm
 
 from url import url_base
 
+# ### ADICIONADO: Paleta de cores profissional (Estilo Pi-hole) ###
+C_RESET = '\033[0m'
+C_GREEN = '\033[92m'
+C_RED = '\033[91m'
+C_BLUE = '\033[94m'
+C_YELLOW = '\033[93m'
+
+# Símbolos de status
+S_OK = f"[{C_GREEN}✓{C_RESET}]"
+S_ERR = f"[{C_RED}✗{C_RESET}]"
+S_INFO = f"[{C_BLUE}i{C_RESET}]"
+S_WARN = f"[{C_YELLOW}!{C_RESET}]"
+# ### FIM DA PALETA ###
+
 # Configuração do diretório
 logs_dir = Path.cwd() / "logs"
 os.makedirs(logs_dir, exist_ok=True)
+
+# O arquivo JSON deve estar DENTRO do diretório 'logs'
+DOWNLOADED_LOGS_FILE = logs_dir / "downloaded_logs.json"
+
+
+def load_downloaded_logs() -> set:
+    """Carrega os nomes dos logs já baixados do arquivo JSON."""
+    if not DOWNLOADED_LOGS_FILE.exists():
+        print(f"{S_WARN} Aviso: {DOWNLOADED_LOGS_FILE.name} não encontrado. Criando um novo...")
+        return set()
+    try:
+        with open(DOWNLOADED_LOGS_FILE, "r") as f:
+            downloaded_list = json.load(f)
+            if not isinstance(downloaded_list, list):
+                 print(f"{S_ERR} Erro: {DOWNLOADED_LOGS_FILE.name} não contém uma lista. Tratando como vazio.")
+                 return set()
+            return set(downloaded_list)
+    except json.JSONDecodeError:
+        print(f"{S_ERR} Erro: {DOWNLOADED_LOGS_FILE.name} está corrompido ou vazio. Tratando como novo.")
+        return set()
+    except (FileNotFoundError, TypeError) as e:
+        print(f"{S_ERR} Erro inesperado ao ler {DOWNLOADED_LOGS_FILE}: {e}. Tratando como vazio.")
+        return set()
+
+
+def update_downloaded_logs(successfully_downloaded_keys: set):
+    """Atualiza o JSON com os novos logs baixados com sucesso."""
+    if not successfully_downloaded_keys:
+        return
+
+    downloaded_logs_set = load_downloaded_logs()
+    downloaded_logs_set.update(successfully_downloaded_keys)
+    
+    try:
+        with open(DOWNLOADED_LOGS_FILE, "w") as f:
+            json.dump(sorted(list(downloaded_logs_set)), f, indent=4)
+        print(f"{S_OK} {len(successfully_downloaded_keys)} novos logs adicionados ao {DOWNLOADED_LOGS_FILE.name}")
+    except IOError as e:
+        print(f"{S_ERR} Erro crítico ao salvar {DOWNLOADED_LOGS_FILE}: {e}")
 
 
 def get_remote_xml_data(last_modified=None):
@@ -39,54 +94,109 @@ def filter_key_tag(data_xml: str) -> set:
     return set(re.findall(pattern, data_xml))
 
 
-def get_new_keys(found_keys: set, logs_dir: Path) -> set:
-    """Obtém novas chaves que não estão presentes no diretório de logs."""
-    arquivos_existentes = {
-        f.name.split("_", 1)[-1].rsplit(".", 1)[0]
-        for f in logs_dir.iterdir()
-        if f.is_file()
-    }
-    return {url_base + key for key in found_keys if key not in arquivos_existentes}
+def get_new_keys(found_keys: set) -> tuple[set, set]:
+    """Compara as chaves encontradas com o JSON de logs baixados."""
+    downloaded_logs = load_downloaded_logs()
+    new_key_names = found_keys - downloaded_logs
+    
+    base_url_sem_barra = url_base.rstrip('/')
+    new_key_urls = {f"{base_url_sem_barra}/{key}" for key in new_key_names}
+    
+    return new_key_urls, new_key_names
 
 
-def download_file(url: str, logs_dir: Path):
-    """Faz o download de um arquivo de log e o salva no diretório de logs."""
+def download_file(url: str, logs_dir: Path) -> str | None:
+    """
+    Baixa um único arquivo de log.
+    Retorna o nome (chave) do arquivo em caso de sucesso, ou None em caso de falha.
+    """
     try:
-        response = requests.get(url)
+        file_name_key = url.split("/")[-1]
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        file_name_txt = f"{timestamp}_{file_name_key}.txt"
+        file_path = logs_dir / file_name_txt
+    
+        response = requests.get(url, stream=True)
         response.raise_for_status()
-        log_text = response.text
-        filename = logs_dir / f"{time.localtime().tm_year}_{os.path.basename(url)}.txt"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(log_text)
-    except requests.exceptions.RequestException as e:
-        print(f"\033[91mErro ao baixar arquivo {url}: {e}\033[0m")
+        
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+        
+        return file_name_key
+    
+    except requests.RequestException as e:
+        # Nota: Este print pode bagunçar a barra de progresso (tqdm),
+        # mas é essencial para o log de erros.
+        print(f"\n{S_ERR} Erro ao baixar {url}: {e}")
+        if "file_path" in locals() and file_path.exists():
+            os.remove(file_path)
+        return None
 
 
-def download_text_files(new_keys: set, logs_dir: Path) -> bool:
-    """Faz o download de todos os novos arquivos de log."""
-    if not new_keys:
-        return False
+def download_text_files(new_keys_urls: set, logs_dir: Path) -> set:
+    """
+    Faz o download de todos os novos arquivos de log.
+    Retorna um set contendo apenas as chaves dos arquivos baixados com sucesso.
+    """
+    if not new_keys_urls:
+        return set()
+    
+    successfully_downloaded_keys = set()
+    
     with ThreadPoolExecutor(max_workers=5) as executor:
-        list(
-            tqdm(
-                executor.map(lambda url: download_file(url, logs_dir), new_keys),
-                total=len(new_keys),
-                desc="Baixando logs",
-            )
+        future_to_url = {executor.submit(download_file, url, logs_dir): url for url in new_keys_urls}
+        
+        # A barra de progresso (tqdm) já é um ótimo feedback visual
+        results_iterator = tqdm(
+            future_to_url,
+            total=len(new_keys_urls),
+            desc=f"{S_INFO} Baixando logs",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}]"
         )
-    print("\033[92mRegistros de log baixados com sucesso!\033[0m")
-    return True
+        
+        for future in results_iterator:
+            key = future.result()
+            if key is not None:
+                successfully_downloaded_keys.add(key)
+
+    if successfully_downloaded_keys:
+        print(f"{S_OK} {len(successfully_downloaded_keys)}/{len(new_keys_urls)} registros de log baixados com sucesso!")
+    elif new_keys_urls:
+         print(f"{S_ERR} Nenhum log pôde ser baixado ({len(new_keys_urls)} tentativas).")
+         
+    return successfully_downloaded_keys
 
 
 def execute_main(last_modified=None):
     """Executa a função principal para obter e baixar novos logs."""
-    data, last_modified = get_remote_xml_data(last_modified)
-    if data is None:
+    try:
+        data, last_modified = get_remote_xml_data(last_modified)
+    except Exception as e:
+        print(f"{S_ERR} Erro ao buscar dados XML: {e}")
         return False, last_modified
+        
+    if data is None:
+        return False, last_modified  # Status 304 - Nada modificado
+    
     found_keys = filter_key_tag(data)
-    new_keys = get_new_keys(found_keys, logs_dir)
-    success = download_text_files(new_keys, logs_dir)
-    return success, last_modified
+    if not found_keys:
+        print(f"{S_WARN} Aviso: XML recebido, mas nenhuma <Key> encontrada.")
+        return False, last_modified
+        
+    new_key_urls, new_key_names = get_new_keys(found_keys)
+    
+    if not new_key_urls:
+        return False, last_modified # Não há logs novos para baixar
+    
+    successfully_downloaded_keys = download_text_files(new_key_urls, logs_dir)
+    
+    if successfully_downloaded_keys:
+        update_downloaded_logs(successfully_downloaded_keys)
+        return True, last_modified
+    
+    return False, last_modified
 
 
 def run():
@@ -95,12 +205,19 @@ def run():
     while True:
         success, last_modified = execute_main(last_modified)
         if not success:
-            print("\033[91mNão há novos registros para download. Reagendando...\033[0m")
-        intervalo = random.uniform(7, 9) * 3600
-        print(f"\033[94mPróxima execução em {intervalo / 3600:.2f} horas\033[0m")
-        time.sleep(intervalo)
+            print(f"{S_INFO} Não há novos registros para download (ou downloads falharam). Reagendando...")
+        
+        # Define o tempo de espera aleatório (Jitter) em SEGUNDOS
+        min_wait = 6 * 60 * 60  # 6 horas
+        max_wait = 8 * 60 * 60  # 8 horas
+        wait_time = random.randint(min_wait, max_wait)
+        
+        wait_hours = wait_time // 3600
+        wait_minutes = (wait_time % 3600) // 60
+        
+        print(f"{S_INFO} Aguardando {wait_hours} horas e {wait_minutes} minutos para a próxima verificação...")
+        time.sleep(wait_time)
 
 
 if __name__ == "__main__":
-    print("\033[91mExecutando main pela primeira vez...\033[0m")
     run()
