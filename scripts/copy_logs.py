@@ -3,9 +3,12 @@ import os
 import random
 import re
 import time
+import shutil
+import sys
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional, Set, Tuple
 
 import chardet
 import requests
@@ -13,247 +16,273 @@ from tqdm import tqdm
 
 from url import url_base
 
-# Paleta de cores simples (ANSI)
-C_RESET = "\033[0m"
-C_GREEN = "\033[92m"
-C_RED = "\033[91m"
-C_BLUE = "\033[94m"
-C_YELLOW = "\033[93m"
+# --- CYBERPUNK UI ENGINE ---
+class UI:
+    """Interface Visual estilo Cyberpunk/Terminal Hacker."""
+    
+    # Paleta Neon (High Intensity ANSI)
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    
+    # Cores Principais
+    NEON_PINK = "\033[95m"    # Títulos, Alertas Críticos
+    NEON_CYAN = "\033[96m"    # Bordas, Info de Sistema
+    NEON_GREEN = "\033[92m"   # Sucesso, Downloads
+    NEON_YELLOW = "\033[93m"  # Avisos, Standby
+    NEON_BLUE = "\033[94m"    # Detalhes, Metadata
+    NEON_RED = "\033[91m"     # Erros
+    WHITE = "\033[97m"        # Texto Principal
+    GREY = "\033[90m"         # Texto Secundário/Bordas fracas
 
-# Símbolos de status
-S_OK = f"[{C_GREEN}✓{C_RESET}]"
-S_ERR = f"[{C_RED}✗{C_RESET}]"
-S_INFO = f"[{C_BLUE}i{C_RESET}]"
-S_WARN = f"[{C_YELLOW}!{C_RESET}]"
+    # Ícones
+    ICON_SYS = "⚡"
+    ICON_NET = "⯈"
+    ICON_DL = "⬇"
+    ICON_WAIT = "⏳"
+    
+    # Estado Global
+    SESSION_DOWNLOADS = 0
 
-# Diretório de logs e arquivo de controle
-logs_dir = Path.cwd() / "logs"
-os.makedirs(logs_dir, exist_ok=True)
+    @staticmethod
+    def clear_screen():
+        os.system('cls' if os.name == 'nt' else 'clear')
 
-DOWNLOADED_LOGS_FILE = logs_dir / "downloaded_logs.json"
+    @staticmethod
+    def header(status_main: str, status_sub: str = ""):
+        """Dashboard fixo com visual Cyberpunk."""
+        UI.clear_screen()
+        # Obtém largura, fallback para 80 se falhar
+        col_size = shutil.get_terminal_size((80, 20)).columns
+        width = col_size
+        
+        # Topo
+        print(f"{UI.NEON_CYAN}╔{'═' * (width - 2)}╗{UI.RESET}")
+        
+        # Título
+        title = f"{UI.BOLD} LOG_SYNC_PROTOCOL_V2 {UI.RESET}"
+        pad_title = (width - 2 - len(" LOG_SYNC_PROTOCOL_V2 ")) // 2
+        
+        # Correção de padding para evitar quebra de linha em terminais estreitos
+        right_pad = width - 2 - pad_title - len(" LOG_SYNC_PROTOCOL_V2 ")
+        if right_pad < 0: right_pad = 0
+
+        print(f"{UI.NEON_CYAN}║{UI.RESET}{' ' * pad_title}{UI.NEON_PINK}{title}{UI.RESET}{' ' * right_pad}{UI.NEON_CYAN}║{UI.RESET}")
+        
+        # Divisor Tech
+        print(f"{UI.NEON_CYAN}╠{'═' * (width - 2)}╣{UI.RESET}")
+        
+        # Dados da Sessão
+        lbl_sess = f"{UI.GREY}SESSION_DATA:{UI.RESET}"
+        val_sess = f"{UI.NEON_GREEN}{UI.SESSION_DOWNLOADS:03d}{UI.RESET}"
+        
+        lbl_stat = f"{UI.GREY}SYSTEM_STATUS:{UI.RESET}"
+        val_stat = f"{UI.WHITE}{status_main}{UI.RESET}"
+        
+        # Monta a linha de status
+        line_content = f" {UI.ICON_SYS} {lbl_sess} [{val_sess}]   {lbl_stat} [{val_stat}] {status_sub}"
+        
+        # Calcula padding real (removendo caracteres ANSI invisíveis para alinhar borda)
+        # Estimativa simples de comprimento visível
+        visible_text = f" {UI.ICON_SYS} SESSION_DATA: [000]   SYSTEM_STATUS: [{status_main}] {status_sub}"
+        pad_right = width - 4 - len(visible_text)
+        if pad_right < 0: pad_right = 0
+        
+        print(f"{UI.NEON_CYAN}║{UI.RESET}{line_content}{' ' * pad_right}{UI.NEON_CYAN}║{UI.RESET}")
+        print(f"{UI.NEON_CYAN}╚{'═' * (width - 2)}╝{UI.RESET}\n")
+
+    @staticmethod
+    def log(prefix: str, msg: str, color_prefix: str = NEON_CYAN, color_msg: str = WHITE):
+        """Imprime linha de log colorida sem quebrar layout."""
+        # Limpa linha atual e imprime
+        sys.stdout.write(f"\r\033[K{UI.GREY}[{color_prefix}{prefix}{UI.GREY}] {UI.ICON_NET} {color_msg}{msg}{UI.RESET}")
+        sys.stdout.flush()
+
+    @staticmethod
+    def countdown_bar(seconds: int):
+        """Barra de espera estilo 'Cooldown'."""
+        try:
+            # FIX: Concatenamos as variáveis de cor fora da string literals 
+            # para que o tqdm não tente interpretar "UI" como uma chave interna.
+            fmt = "{desc} {bar} " + UI.NEON_CYAN + "{remaining}" + UI.RESET
+
+            for _ in tqdm(
+                range(seconds),
+                desc=f"{UI.NEON_PINK}COOLDOWN{UI.RESET}",
+                bar_format=fmt,
+                colour="magenta", 
+                leave=False,
+                ascii="░▒▓█" 
+            ):
+                time.sleep(1)
+        except KeyboardInterrupt:
+            return
+
+# --- Configurações de Diretórios ---
+LOGS_DIR = Path.cwd() / "logs"
+DOWNLOADED_LOGS_FILE = LOGS_DIR / "downloaded_logs.json"
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 
-def load_downloaded_logs() -> set:
-    """Carrega os nomes dos logs já baixados do arquivo JSON."""
-    if not DOWNLOADED_LOGS_FILE.exists():
-        print(
-            f"{S_WARN} Aviso: {DOWNLOADED_LOGS_FILE.name} não encontrado. "
-            "Criando um novo..."
-        )
-        return set()
-
+def load_downloaded_logs() -> Set[str]:
+    if not DOWNLOADED_LOGS_FILE.exists(): return set()
     try:
-        with open(DOWNLOADED_LOGS_FILE, "r", encoding="utf-8") as f:
-            downloaded_list = json.load(f)
-
-        if not isinstance(downloaded_list, list):
-            print(
-                f"{S_ERR} Erro: {DOWNLOADED_LOGS_FILE.name} não contém uma lista. "
-                "Tratando como vazio."
-            )
-            return set()
-
-        return set(downloaded_list)
-
-    except json.JSONDecodeError:
-        print(
-            f"{S_ERR} Erro: {DOWNLOADED_LOGS_FILE.name} está corrompido ou vazio. "
-            "Tratando como novo."
-        )
-        return set()
-    except (FileNotFoundError, TypeError) as e:
-        print(
-            f"{S_ERR} Erro inesperado ao ler {DOWNLOADED_LOGS_FILE}: {e}. "
-            "Tratando como vazio."
-        )
+        content = DOWNLOADED_LOGS_FILE.read_text(encoding="utf-8")
+        downloaded_list = json.loads(content)
+        return set(downloaded_list) if isinstance(downloaded_list, list) else set()
+    except Exception:
         return set()
 
 
-def update_downloaded_logs(successfully_downloaded_keys: set) -> None:
-    """Atualiza o JSON com os novos logs baixados com sucesso."""
-    if not successfully_downloaded_keys:
-        return
-
-    downloaded_logs_set = load_downloaded_logs()
-    downloaded_logs_set.update(successfully_downloaded_keys)
-
+def update_downloaded_logs(new_keys: Set[str]) -> None:
+    if not new_keys: return
+    current_logs = load_downloaded_logs()
+    current_logs.update(new_keys)
     try:
         with open(DOWNLOADED_LOGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(sorted(downloaded_logs_set), f, indent=4)
-
-        print(
-            f"{S_OK} {len(successfully_downloaded_keys)} novos logs adicionados "
-            f"ao {DOWNLOADED_LOGS_FILE.name}"
-        )
-    except IOError as e:
-        print(f"{S_ERR} Erro crítico ao salvar {DOWNLOADED_LOGS_FILE}: {e}")
+            json.dump(sorted(current_logs), f, indent=4)
+    except IOError:
+        pass
 
 
-def get_remote_xml_data(
-    last_modified: str | None = None,
-) -> tuple[str | None, str | None]:
-    """Obtém dados XML remotos e detecta a codificação."""
+def get_remote_xml_data(last_modified: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
     headers = {"If-Modified-Since": last_modified} if last_modified else {}
-    response = requests.get(url_base, headers=headers)
+    
+    try:
+        UI.log("NET", "Establishing uplik...", UI.NEON_BLUE)
+        response = requests.get(url_base, headers=headers, timeout=30)
+    except requests.RequestException:
+        UI.log("ERR", "Connection Failed", UI.NEON_RED, UI.NEON_RED)
+        time.sleep(2)
+        return None, last_modified
 
     if response.status_code == 304:
-        # Nada modificado desde a última consulta
+        UI.log("304", "No New Data / Cache Hit", UI.NEON_YELLOW, UI.GREY)
+        time.sleep(2)
         return None, last_modified
 
     encoding = chardet.detect(response.content)["encoding"]
-    if not encoding:
-        raise ValueError("Não foi possível determinar a codificação dos dados.")
+    if not encoding: return None, last_modified
 
-    last_modified = response.headers.get("Last-Modified")
-    conteudo_xml = response.content.decode(encoding)
-    return conteudo_xml, last_modified
+    UI.log("OK", "Payload Received", UI.NEON_GREEN)
+    return response.content.decode(encoding), response.headers.get("Last-Modified")
 
 
-def filter_key_tag(data_xml: str) -> set:
-    """Filtra e retorna as chaves encontradas no XML."""
-    pattern = r"<Key>(.*?)</Key>"
-    return set(re.findall(pattern, data_xml))
+def extract_keys_from_xml(xml_content: str) -> Set[str]:
+    return set(re.findall(r"<Key>(.*?)</Key>", xml_content))
 
 
-def get_new_keys(found_keys: set) -> tuple[set, set]:
-    """Compara as chaves encontradas com o JSON de logs baixados."""
-    downloaded_logs = load_downloaded_logs()
-
-    # Chaves que estão no XML e ainda não estão no JSON
-    new_key_names = found_keys - downloaded_logs
-
-    base_url_sem_barra = url_base.rstrip("/")
-    new_key_urls = {f"{base_url_sem_barra}/{key}" for key in new_key_names}
-
-    return new_key_urls, new_key_names
+def identify_new_downloads(found_keys: Set[str]) -> Tuple[Set[str], Set[str]]:
+    already_downloaded = load_downloaded_logs()
+    new_keys = found_keys - already_downloaded
+    base_url = url_base.rstrip("/")
+    download_urls = {f"{base_url}/{key}" for key in new_keys}
+    return download_urls, new_keys
 
 
-def download_file(url: str, logs_dir: Path) -> str | None:
-    """
-    Baixa um único arquivo de log.
-    Retorna o nome (chave) do arquivo em caso de sucesso, ou None em caso de falha.
-    """
+def download_single_file(url: str) -> Optional[str]:
+    key = url.split("/")[-1]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_path = LOGS_DIR / f"{timestamp}_{key}.txt"
+
     try:
-        file_name_key = url.split("/")[-1]
-
-        # Mantém o comportamento original: prefixo com timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_name_txt = f"{timestamp}_{file_name_key}.txt"
-        file_path = logs_dir / file_name_txt
-
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-
-        with open(file_path, "wb") as f:
-            f.write(response.content)
-
-        return file_name_key
-
-    except requests.RequestException as e:
-        # Esse print pode interferir levemente na barra do tqdm, mas é importante
-        print(f"\n{S_ERR} Erro ao baixar {url}: {e}")
-        if "file_path" in locals() and file_path.exists():
-            os.remove(file_path)
+        with requests.get(url, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(file_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        return key
+    except requests.RequestException:
+        if file_path.exists():
+            try:
+                os.remove(file_path)
+            except OSError: pass
         return None
 
 
-def download_text_files(new_keys_urls: set, logs_dir: Path) -> set:
-    """
-    Faz o download de todos os novos arquivos de log.
-    Retorna um set contendo apenas as chaves dos arquivos baixados com sucesso.
-    """
-    if not new_keys_urls:
-        return set()
+def download_manager(urls: Set[str]) -> Set[str]:
+    if not urls: return set()
 
-    successfully_downloaded_keys: set = set()
-
+    # Muda o header para modo ATIVO
+    UI.header("ACTIVE", f"{UI.NEON_PINK}>> DOWNLOADING BATCH{UI.RESET}")
+    success_keys = set()
+    
+    print("") # Espaçamento
+    
     with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_url = {
-            executor.submit(download_file, url, logs_dir): url for url in new_keys_urls
-        }
-
-        results_iterator = tqdm(
-            future_to_url,
-            total=len(new_keys_urls),
-            desc=f"{S_INFO} Baixando logs",
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}]",
+        futures = {executor.submit(download_single_file, url): url for url in urls}
+        
+        # Barra de progresso Cyberpunk (Verde neon)
+        pbar = tqdm(
+            futures, 
+            total=len(urls),
+            unit="file",
+            desc=f"{UI.NEON_GREEN}TRANSFER{UI.RESET}",
+            bar_format="{desc} {bar} {n_fmt}/{total_fmt} [{elapsed}]",
+            colour="green",
+            ascii="░▒▓█" # Estilo bloco sólido
         )
+        
+        for future in pbar:
+            if result_key := future.result():
+                success_keys.add(result_key)
 
-        for future in results_iterator:
-            key = future.result()
-            if key is not None:
-                successfully_downloaded_keys.add(key)
-
-    if successfully_downloaded_keys:
-        print(
-            f"{S_OK} {len(successfully_downloaded_keys)}/{len(new_keys_urls)} "
-            "registros de log baixados com sucesso!"
-        )
-    elif new_keys_urls:
-        print(f"{S_ERR} Nenhum log pôde ser baixado ({len(new_keys_urls)} tentativas).")
-
-    return successfully_downloaded_keys
+    return success_keys
 
 
-def execute_main(last_modified: str | None = None) -> tuple[bool, str | None]:
-    """Executa a função principal para obter e baixar novos logs."""
+def routine_check(last_modified: Optional[str]) -> Tuple[bool, Optional[str]]:
+    UI.header("SCANNING", f"{UI.NEON_BLUE}>> CHECKING SERVER{UI.RESET}")
+    
     try:
-        data, last_modified = get_remote_xml_data(last_modified)
-    except Exception as e:
-        print(f"{S_ERR} Erro ao buscar dados XML: {e}")
+        xml_data, new_last_modified = get_remote_xml_data(last_modified)
+    except Exception:
         return False, last_modified
 
-    if data is None:
-        # Status 304 - Nada modificado
-        return False, last_modified
+    if xml_data is None:
+        return False, new_last_modified
 
-    found_keys = filter_key_tag(data)
-    if not found_keys:
-        print(f"{S_WARN} Aviso: XML recebido, mas nenhuma <Key> encontrada.")
-        return False, last_modified
+    found_keys = extract_keys_from_xml(xml_data)
+    urls_to_download, _ = identify_new_downloads(found_keys)
 
-    new_key_urls, _new_key_names = get_new_keys(found_keys)
-    if not new_key_urls:
-        # XML válido, mas nenhum log novo
-        return False, last_modified
+    if not urls_to_download:
+        UI.log("SYNC", "System synchronized. No actions.", UI.NEON_GREEN, UI.GREY)
+        time.sleep(2)
+        return False, new_last_modified
 
-    successfully_downloaded_keys = download_text_files(new_key_urls, logs_dir)
+    downloaded_keys = download_manager(urls_to_download)
+    
+    if downloaded_keys:
+        update_downloaded_logs(downloaded_keys)
+        UI.SESSION_DOWNLOADS += len(downloaded_keys)
+        return True, new_last_modified
 
-    if successfully_downloaded_keys:
-        update_downloaded_logs(successfully_downloaded_keys)
-        return True, last_modified
-
-    return False, last_modified
+    return False, new_last_modified
 
 
-def run() -> None:
-    """Executa o processo principal e agenda a próxima execução."""
-    last_modified: str | None = None
+def main_loop() -> None:
+    last_modified = None
+    UI.SESSION_DOWNLOADS = 0
 
     while True:
-        success, last_modified = execute_main(last_modified)
+        success, last_modified = routine_check(last_modified)
 
-        if not success:
-            print(
-                f"{S_INFO} Não há novos registros para download "
-                "(ou downloads falharam). Reagendando..."
-            )
-
-        # Intervalo aleatório (jitter) em segundos: 6h a 8h
-        min_wait = 6 * 60 * 60  # 6 horas
-        max_wait = 8 * 60 * 60  # 8 horas
-        wait_time = random.randint(min_wait, max_wait)
-
-        wait_hours = wait_time // 3600
-        wait_minutes = (wait_time % 3600) // 60
-
-        print(
-            f"{S_INFO} Aguardando {wait_hours} horas e "
-            f"{wait_minutes} minutos para a próxima verificação..."
-        )
-
-        time.sleep(wait_time)
+        # Tempo de espera (6 a 8 horas)
+        wait_seconds = random.randint(21600, 28800)
+        next_run = (datetime.now() + timedelta(seconds=wait_seconds)).strftime('%H:%M')
+        
+        # Modo STANDBY
+        UI.header("STANDBY", f"{UI.NEON_YELLOW}>> NEXT CYCLE: {next_run}{UI.RESET}")
+        
+        UI.countdown_bar(wait_seconds)
 
 
 if __name__ == "__main__":
-    run()
+    try:
+        # Configura título do terminal (Windows/Linux)
+        if os.name == 'nt':
+            os.system('title LOG SYNC PROTOCOL')
+        else:
+            sys.stdout.write("\x1b]2;LOG SYNC PROTOCOL\x07")
+            
+        main_loop()
+    except KeyboardInterrupt:
+        print(f"\n{UI.NEON_RED}>> SYSTEM HALT. DISCONNECTING...{UI.RESET}")
