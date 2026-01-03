@@ -1,8 +1,44 @@
-os
-re
-time
-pathlib
-tqdm>=4.4.0
-chardet>=4.0.0
-urllib3>=1.26.18
+# =============================================================================
+# WoW Arena Logs ETL Pipeline - Dependencies
+# =============================================================================
+# Python 3.11+ required
+#
+# Install: pip install -r requirements.txt
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Core Dependencies
+# -----------------------------------------------------------------------------
+
+# HTTP client for log synchronization
 requests>=2.31.0
+
+# Character encoding detection
+chardet>=5.2.0
+
+# High-performance JSON serialization
+orjson>=3.9.0
+
+# Progress bars for CLI
+tqdm>=4.66.0
+
+# -----------------------------------------------------------------------------
+# TUI Interface (optional)
+# -----------------------------------------------------------------------------
+
+# Terminal UI framework
+textual>=0.68.0
+
+# -----------------------------------------------------------------------------
+# Development Dependencies (optional)
+# -----------------------------------------------------------------------------
+
+# Linting and formatting
+# ruff>=0.1.0
+
+# Type checking
+# mypy>=1.7.0
+
+# Testing
+# pytest>=7.4.0
+# pytest-cov>=4.1.0

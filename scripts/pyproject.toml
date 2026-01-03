@@ -1,0 +1,43 @@
+[project]
+name = "myproject"
+version = "0.1.0"
+dependencies = ["textual>=0.68.0"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes errors
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "I",    # isort
+	"A",	# flake8-builtins
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+    "FURB", # refurb (Modernização e built-ins)
+    "PTH",  # flake8-use-pathlib (Modernização de caminhos)
+    "PERF", # Perflint (Performance e concisão)
+	"G",    # (flake8-logging-format)
+	"FBT",  # flake8-boolean-trap
+	"N",    # pep8-naming
+	"PLW",  # Warning 
+	"C901",  # complex-structure 
+	
+]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["myproject"]
+known-third-party = ["numpy", "pandas"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+
+[[tool.mypy.overrides]]
+module = "legacy.*"
+ignore_errors = true
